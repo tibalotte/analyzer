@@ -1,0 +1,133 @@
+<UserControl x:Class="FFBAnalyzer.Views.ComparisonView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Grid Grid.Row="0" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Content="← Back"
+                    Style="{StaticResource SecondaryBtn}"
+                    Command="{Binding GoBackCommand}"
+                    Margin="0,0,12,0"/>
+            <TextBlock Grid.Column="1" Text="Run Comparison"
+                       Style="{StaticResource H1}"
+                       VerticalAlignment="Center"/>
+        </Grid>
+
+        <!-- Main content -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="200"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Run selector -->
+            <Border Grid.Column="0" Background="{StaticResource BgPanel}"
+                    CornerRadius="8" Padding="12" Margin="0,0,12,0">
+                <StackPanel>
+                    <TextBlock Text="Runs" Style="{StaticResource H2}" Margin="0,0,0,12"/>
+                    <ItemsControl ItemsSource="{Binding RunItems}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <!-- Colour swatch -->
+                                    <Border Grid.Column="0" Width="14" Height="14"
+                                            CornerRadius="3" Margin="0,0,8,0"
+                                            VerticalAlignment="Center">
+                                        <Border.Background>
+                                            <SolidColorBrush Color="{Binding ColorHex}"/>
+                                        </Border.Background>
+                                    </Border>
+                                    <CheckBox Grid.Column="1"
+                                              IsChecked="{Binding IsIncluded}"
+                                              Foreground="{StaticResource TextPrimary}"
+                                              FontSize="12">
+                                        <TextBlock Text="{Binding Run.DisplayLabel}"
+                                                   TextWrapping="Wrap"/>
+                                    </CheckBox>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <!-- Charts + table -->
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Overlay chart -->
+                <Border Grid.Row="0" Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="Overlay"
+                                   Style="{StaticResource H2}" Margin="0,0,0,4"/>
+                        <lvc:CartesianChart Grid.Row="1"
+                                            Series="{Binding OverlaySeries}"
+                                            XAxes="{Binding XAxes}"
+                                            YAxes="{Binding YAxes}"
+                                            LegendPosition="Top"
+                                            Background="Transparent"/>
+                    </Grid>
+                </Border>
+
+                <!-- Diff chart -->
+                <Border Grid.Row="1" Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="Difference (vs first selected run)"
+                                   Style="{StaticResource H2}" Margin="0,0,0,4"/>
+                        <lvc:CartesianChart Grid.Row="1"
+                                            Series="{Binding DiffSeries}"
+                                            XAxes="{Binding XAxes}"
+                                            Background="Transparent"/>
+                    </Grid>
+                </Border>
+
+                <!-- Metric table -->
+                <Border Grid.Row="2" Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="Metric Comparison"
+                                   Style="{StaticResource H2}" Margin="0,0,0,8"/>
+                        <DataGrid Grid.Row="1"
+                                  ItemsSource="{Binding MetricTable}"
+                                  IsReadOnly="True"
+                                  AutoGenerateColumns="False">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Metric" Width="*"
+                                                    Binding="{Binding Values[0].DisplayName}"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

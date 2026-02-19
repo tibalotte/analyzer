@@ -1,0 +1,116 @@
+<UserControl x:Class="FFBAnalyzer.Views.ExportImportView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Loaded="OnLoaded">
+    <Grid MaxWidth="900" HorizontalAlignment="Center">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Grid Grid.Row="0" Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Content="← Home"
+                    Style="{StaticResource SecondaryBtn}"
+                    Command="{Binding GoHomeCommand}"
+                    Margin="0,0,12,0"/>
+            <TextBlock Grid.Column="1" Text="Export / Import"
+                       Style="{StaticResource H1}" VerticalAlignment="Center"/>
+        </Grid>
+
+        <!-- Import / Export actions -->
+        <Border Grid.Row="1" Style="{StaticResource Card}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Import -->
+                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                    <TextBlock Text="Import" Style="{StaticResource H2}" Margin="0,0,0,12"/>
+                    <TextBlock Text="Import a session shared by another user."
+                               Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Import JSON"
+                                Style="{StaticResource PrimaryBtn}"
+                                Margin="0,0,8,0"
+                                Click="OnImportJson"/>
+                        <Button Content="Import ZIP"
+                                Style="{StaticResource SecondaryBtn}"
+                                Click="OnImportZip"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <Separator Grid.Column="0" Grid.ColumnSpan="2"
+                           Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}"
+                           HorizontalAlignment="Center" Width="1"
+                           LayoutTransform="{x:Null}"
+                           Margin="0"/>
+
+                <!-- Export -->
+                <StackPanel Grid.Column="1" Margin="16,0,0,0">
+                    <TextBlock Text="Export Selected" Style="{StaticResource H2}" Margin="0,0,0,12"/>
+                    <TextBlock Text="Select a session below, then export."
+                               Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Export JSON"
+                                Style="{StaticResource PrimaryBtn}"
+                                Margin="0,0,8,0"
+                                Click="OnExportJson"/>
+                        <Button Content="Export ZIP (with CSVs)"
+                                Style="{StaticResource SecondaryBtn}"
+                                Click="OnExportZip"/>
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Sessions list -->
+        <Border Grid.Row="2" Style="{StaticResource Card}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Text="Local Sessions"
+                           Style="{StaticResource H2}" Margin="0,0,0,8"/>
+                <ListBox Grid.Row="1"
+                         ItemsSource="{Binding Sessions}"
+                         SelectedItem="{Binding SelectedSession}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Padding="4,2">
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimary}"/>
+                                <TextBlock Style="{StaticResource Muted}">
+                                    <Run Text="{Binding Runs.Count}"/>
+                                    <Run Text=" runs · "/>
+                                    <Run Text="{Binding UpdatedAt, StringFormat='{}{0:yyyy-MM-dd}'}"/>
+                                </TextBlock>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+        </Border>
+
+        <!-- Status bar -->
+        <Border Grid.Row="3" Background="{StaticResource BgPanel}"
+                CornerRadius="4" Padding="8,4" Margin="0,8,0,0">
+            <Grid>
+                <TextBlock Text="{Binding StatusMessage}"
+                           Foreground="{StaticResource TextPrimary}"/>
+                <ProgressBar IsIndeterminate="True" Height="3"
+                             VerticalAlignment="Bottom"
+                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisible}}"/>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

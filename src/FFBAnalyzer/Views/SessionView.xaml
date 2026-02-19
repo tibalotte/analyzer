@@ -1,0 +1,159 @@
+<UserControl x:Class="FFBAnalyzer.Views.SessionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Grid Grid.Row="0" Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Content="← Back"
+                    Style="{StaticResource SecondaryBtn}"
+                    Command="{Binding GoHomeCommand}"
+                    Margin="0,0,12,0"/>
+            <TextBox Grid.Column="1" Text="{Binding SessionName, UpdateSourceTrigger=PropertyChanged}"
+                     FontSize="20" FontWeight="Bold"
+                     Background="Transparent"
+                     BorderThickness="0,0,0,1"
+                     BorderBrush="{StaticResource AccentBlue}"
+                     VerticalAlignment="Center"/>
+            <Button Grid.Column="2" Content="Save"
+                    Style="{StaticResource PrimaryBtn}"
+                    Command="{Binding SaveSessionAsyncCommand}"
+                    Margin="8,0,0,0"/>
+        </Grid>
+
+        <!-- Battery & Baseline bar -->
+        <Border Grid.Row="1" Style="{StaticResource Card}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Battery:" Foreground="{StaticResource TextMuted}"
+                               VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox ItemsSource="{Binding AvailableBatteries}"
+                              SelectedItem="{Binding SelectedBattery}"
+                              DisplayMemberPath="Name"
+                              Width="200"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="Start Baseline"
+                        Style="{StaticResource PrimaryBtn}"
+                        Command="{Binding StartBaselineAsyncCommand}"
+                        Margin="8,0,0,0"/>
+                <Button Grid.Column="2" Content="Compare All"
+                        Style="{StaticResource SecondaryBtn}"
+                        Command="{Binding CompareRunsCommand}"
+                        Margin="8,0,0,0"/>
+                <Button Grid.Column="3" Content="Export ZIP"
+                        Style="{StaticResource SecondaryBtn}"
+                        Command="{Binding ExportZipAsyncCommand}"
+                        CommandParameter="{x:Null}"
+                        Margin="8,0,0,0"/>
+            </Grid>
+        </Border>
+
+        <!-- Runs list -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding Runs}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource Card}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Baseline badge -->
+                                <Border Grid.Column="0" Background="{StaticResource AccentGreen}"
+                                        CornerRadius="4" Padding="6,2" Margin="0,0,12,0"
+                                        VerticalAlignment="Center"
+                                        Visibility="{Binding IsBaseline, Converter={StaticResource BoolToVisible}}">
+                                    <TextBlock Text="BASELINE" FontSize="10" FontWeight="Bold"
+                                               Foreground="White"/>
+                                </Border>
+
+                                <!-- Run info -->
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextPrimary}">
+                                        <Run Text="{Binding TestDefinition.Name}"/>
+                                        <Run Text=" – "/>
+                                        <Run Text="{Binding DisplayLabel}"/>
+                                    </TextBlock>
+                                    <TextBlock Style="{StaticResource Muted}">
+                                        <Run Text="{Binding Timestamp, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}"/>
+                                        <Run Text=" · "/>
+                                        <Run Text="{Binding Device.Name}"/>
+                                    </TextBlock>
+                                    <!-- Clipping warning -->
+                                    <TextBlock Text="⚠ Clipping detected"
+                                               Foreground="{StaticResource AccentRed}"
+                                               Visibility="{Binding ClippingDetected, Converter={StaticResource BoolToVisible}}"
+                                               FontSize="11" Margin="0,2,0,0"/>
+                                </StackPanel>
+
+                                <!-- Aborted badge -->
+                                <Border Grid.Column="2"
+                                        Background="{StaticResource AccentRed}"
+                                        CornerRadius="4" Padding="6,2"
+                                        Margin="0,0,8,0"
+                                        VerticalAlignment="Center"
+                                        Visibility="{Binding WasAborted, Converter={StaticResource BoolToVisible}}">
+                                    <TextBlock Text="ABORTED" FontSize="10" FontWeight="Bold"
+                                               Foreground="White"/>
+                                </Border>
+
+                                <!-- View button -->
+                                <Button Grid.Column="3"
+                                        Content="View Results"
+                                        Style="{StaticResource SecondaryBtn}"
+                                        Command="{Binding DataContext.ViewRunCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                        CommandParameter="{Binding}"
+                                        VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Individual test start panel -->
+        <Border Grid.Row="3" Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock Text="Run individual test:" Style="{StaticResource Muted}" Margin="0,0,0,8"/>
+                <WrapPanel>
+                    <Button Content="Step Response"  Style="{StaticResource SecondaryBtn}" Margin="0,0,8,0"
+                            Click="OnRunIndividualTest" Tag="StepResponse"/>
+                    <Button Content="Sine Sweep"     Style="{StaticResource SecondaryBtn}" Margin="0,0,8,0"
+                            Click="OnRunIndividualTest" Tag="SineSweep"/>
+                    <Button Content="Chirp"          Style="{StaticResource SecondaryBtn}" Margin="0,0,8,0"
+                            Click="OnRunIndividualTest" Tag="Chirp"/>
+                    <Button Content="Square Wave"    Style="{StaticResource SecondaryBtn}" Margin="0,0,8,0"
+                            Click="OnRunIndividualTest" Tag="SquareWave"/>
+                    <Button Content="Impulse"        Style="{StaticResource SecondaryBtn}" Margin="0,0,8,0"
+                            Click="OnRunIndividualTest" Tag="Impulse"/>
+                    <Button Content="Constant Force" Style="{StaticResource SecondaryBtn}" Margin="0,0,8,0"
+                            Click="OnRunIndividualTest" Tag="ConstantTorque"/>
+                    <Button Content="Friction"       Style="{StaticResource SecondaryBtn}" Margin="0,0,8,0"
+                            Click="OnRunIndividualTest" Tag="FrictionEmulation"/>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>
