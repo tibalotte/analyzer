@@ -21,7 +21,7 @@ public partial class App : Application
 
         var storage = new SessionStorageService(dbPath);
         var exporter = new ExportService();
-        var adapter = new DirectInputAdapter();
+        var adapter = new CompositeDeviceAdapter(new DirectInputAdapter(), new SimulatedDeviceAdapter());
 
         _mainVm = new MainViewModel(storage, exporter, adapter);
 
