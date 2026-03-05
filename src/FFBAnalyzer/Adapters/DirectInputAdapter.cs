@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
-using FFBAnalyzer.Models;
 using SharpDX.DirectInput;
+using ModelDevice = FFBAnalyzer.Models.Device;
 
 namespace FFBAnalyzer.Adapters;
 
@@ -21,12 +21,12 @@ public sealed class DirectInputAdapter : IDeviceAdapter
     public bool IsOpen => _joystick != null;
     public TelemetryMode AvailableTelemetryMode => TelemetryMode.DirectPartial; // position only
 
-    public async Task<IReadOnlyList<Device>> EnumerateDevicesAsync()
+    public async Task<IReadOnlyList<ModelDevice>> EnumerateDevicesAsync()
     {
         await Task.Yield();
 
         _di ??= new DirectInput();
-        var devices = new List<Device>();
+        var devices = new List<ModelDevice>();
 
         var diDevices = _di.GetDevices(DeviceType.Joystick, DeviceEnumerationFlags.ForceFeedback)
             .Concat(_di.GetDevices(DeviceType.Gamepad, DeviceEnumerationFlags.ForceFeedback))
@@ -34,7 +34,7 @@ public sealed class DirectInputAdapter : IDeviceAdapter
 
         foreach (var di in diDevices)
         {
-            devices.Add(new Device
+            devices.Add(new ModelDevice
             {
                 Name = di.ProductName,
                 VendorId = di.ProductGuid.ToByteArray() is { } b ? (b[1] << 8 | b[0]) : 0,
@@ -47,7 +47,7 @@ public sealed class DirectInputAdapter : IDeviceAdapter
         return devices;
     }
 
-    public async Task OpenDeviceAsync(Device device)
+    public async Task OpenDeviceAsync(ModelDevice device)
     {
         await Task.Yield();
 
