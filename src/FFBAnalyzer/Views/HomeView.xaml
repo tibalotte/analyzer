@@ -102,7 +102,7 @@
                                                    Margin="0,2,0,4"
                                                    TextWrapping="Wrap"/>
                                         <TextBlock Style="{StaticResource Muted}">
-                                            <Run Text="{Binding Runs.Count}"/>
+                                            <Run Text="{Binding Runs.Count, Mode=OneWay}"/>
                                             <Run Text=" runs ·  "/>
                                             <Run Text="{Binding UpdatedAt, StringFormat='Updated {0:yyyy-MM-dd HH:mm}'}"/>
                                         </TextBlock>
