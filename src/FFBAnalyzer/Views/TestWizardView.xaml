@@ -62,7 +62,7 @@
 
                     <Button Content="Start Test"
                             Style="{StaticResource PrimaryBtn}"
-                            Command="{Binding StartCountdownAsyncCommand}"
+                            Command="{Binding StartCountdownCommand}"
                             HorizontalAlignment="Left"/>
                 </StackPanel>
             </Border>

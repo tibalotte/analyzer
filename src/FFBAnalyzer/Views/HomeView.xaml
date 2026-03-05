@@ -41,7 +41,7 @@
 
                 <Button Content="Refresh Devices"
                         Style="{StaticResource SecondaryBtn}"
-                        Command="{Binding RefreshDevicesAsyncCommand}"
+                        Command="{Binding RefreshDevicesCommand}"
                         Margin="0,4,0,0"/>
 
                 <Separator Margin="0,16,0,16" Background="{StaticResource BgCard}"/>
