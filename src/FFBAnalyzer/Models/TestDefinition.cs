@@ -145,6 +145,7 @@ public class TestBattery
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public List<TestDefinition> Tests { get; set; } = new();
+    public override string ToString() => Name;
 
     // ── Factory presets ────────────────────────────────────────────────────
 
