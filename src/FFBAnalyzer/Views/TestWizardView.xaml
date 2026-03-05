@@ -1,0 +1,169 @@
+<UserControl x:Class="FFBAnalyzer.Views.TestWizardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:FFBAnalyzer.ViewModels">
+    <Grid MaxWidth="700" HorizontalAlignment="Center">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,24">
+            <TextBlock Style="{StaticResource H1}">
+                <Run Text="{Binding TestDefinition.Name}"/>
+                <Run Text=" Test"/>
+            </TextBlock>
+            <TextBlock Style="{StaticResource Muted}">
+                <Run Text="Intensity: "/>
+                <Run Text="{Binding TestDefinition.Intensity, StringFormat=P0}"/>
+                <Run Text="  ·  Duration: "/>
+                <Run Text="{Binding TestDefinition.DurationSec, StringFormat='{}{0:F0} s'}"/>
+                <Run Text="  ·  "/>
+                <Run Text="{Binding TestDefinition.Repetitions, StringFormat='{}{0} repetition(s)'}"/>
+            </TextBlock>
+        </StackPanel>
+
+        <!-- ── State-specific content ─────────────────────────────── -->
+        <Grid Grid.Row="1">
+
+            <!-- Instructions state -->
+            <Border Style="{StaticResource Card}"
+                    Visibility="{Binding State, Converter={StaticResource EnumToVisible}, ConverterParameter=Instructions}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource H2}" Text="Before You Start" Margin="0,0,0,16"/>
+
+                    <!-- Safety notice -->
+                    <Border Background="#3A1515" CornerRadius="6" Padding="16" Margin="0,0,0,16">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="⚠" FontSize="20" Margin="0,0,12,0"
+                                       Foreground="{StaticResource AccentRed}"
+                                       VerticalAlignment="Center"/>
+                            <StackPanel>
+                                <TextBlock Text="Safety First"
+                                           Foreground="{StaticResource AccentRed}"
+                                           FontWeight="Bold" Margin="0,0,0,4"/>
+                                <TextBlock Text="Keep the STOP button visible at all times. Maximum intensity is enforced automatically."
+                                           Foreground="{StaticResource TextPrimary}"
+                                           TextWrapping="Wrap" FontSize="13"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Test-specific instructions -->
+                    <TextBlock Text="Instructions:" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimary}" Margin="0,0,0,8"/>
+                    <TextBlock Text="{Binding Instructions}"
+                               TextWrapping="Wrap"
+                               Foreground="{StaticResource TextPrimary}"
+                               FontSize="15" LineHeight="22"
+                               Margin="0,0,0,24"/>
+
+                    <Button Content="Start Test"
+                            Style="{StaticResource PrimaryBtn}"
+                            Command="{Binding StartCountdownAsyncCommand}"
+                            HorizontalAlignment="Left"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Countdown state -->
+            <Border Style="{StaticResource Card}"
+                    Visibility="{Binding State, Converter={StaticResource EnumToVisible}, ConverterParameter=Countdown}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="Starting in…" Style="{StaticResource H2}"
+                               HorizontalAlignment="Center" Margin="0,0,0,16"/>
+                    <TextBlock Text="{Binding Countdown}"
+                               FontSize="96" FontWeight="Bold"
+                               Foreground="{StaticResource AccentBlue}"
+                               HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Running state -->
+            <Border Style="{StaticResource Card}"
+                    Visibility="{Binding State, Converter={StaticResource EnumToVisible}, ConverterParameter=Running}">
+                <StackPanel>
+                    <TextBlock Text="Test Running…" Style="{StaticResource H2}" Margin="0,0,0,16"/>
+
+                    <!-- Force gauge -->
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="80"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Left" HorizontalAlignment="Right"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"
+                                   Style="{StaticResource Muted}"/>
+                        <ProgressBar Grid.Column="1" Height="20"
+                                     Minimum="-1" Maximum="1"
+                                     Value="{Binding CurrentForce}"
+                                     Background="{StaticResource BgCard}"
+                                     Foreground="{StaticResource AccentBlue}"/>
+                        <TextBlock Grid.Column="2" Text="Right"
+                                   VerticalAlignment="Center" Margin="8,0,0,0"
+                                   Style="{StaticResource Muted}"/>
+                    </Grid>
+
+                    <!-- Progress -->
+                    <ProgressBar Height="8" Minimum="0" Maximum="1"
+                                 Value="{Binding ProgressFraction}"
+                                 Background="{StaticResource BgCard}"
+                                 Foreground="{StaticResource AccentGreen}"
+                                 Margin="0,0,0,8"/>
+                    <TextBlock HorizontalAlignment="Right" Style="{StaticResource Muted}">
+                        <Run Text="{Binding ProgressFraction, StringFormat=P0}"/>
+                        <Run Text="  "/>
+                        <Run Text="{Binding ElapsedSec, StringFormat='{}{0:F1} s'}"/>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+
+            <!-- Completed state -->
+            <Border Style="{StaticResource Card}"
+                    Visibility="{Binding State, Converter={StaticResource EnumToVisible}, ConverterParameter=Completed}">
+                <StackPanel>
+                    <TextBlock Text="Test Complete" Style="{StaticResource H2}" Margin="0,0,0,8"
+                               Foreground="{StaticResource AccentGreen}"/>
+                    <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap"
+                               Foreground="{StaticResource TextPrimary}" Margin="0,0,0,24"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="View Results"
+                                Style="{StaticResource PrimaryBtn}"
+                                Command="{Binding ViewResultsCommand}"
+                                Margin="0,0,8,0"/>
+                        <Button Content="Back to Session"
+                                Style="{StaticResource SecondaryBtn}"
+                                Command="{Binding BackToSessionCommand}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Aborted state -->
+            <Border Style="{StaticResource Card}"
+                    Visibility="{Binding State, Converter={StaticResource EnumToVisible}, ConverterParameter=Aborted}">
+                <StackPanel>
+                    <TextBlock Text="Test Stopped" Style="{StaticResource H2}" Margin="0,0,0,8"
+                               Foreground="{StaticResource AccentRed}"/>
+                    <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap"
+                               Foreground="{StaticResource TextPrimary}" Margin="0,0,0,24"/>
+                    <Button Content="Back to Session"
+                            Style="{StaticResource SecondaryBtn}"
+                            Command="{Binding BackToSessionCommand}"
+                            HorizontalAlignment="Left"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- ── Emergency stop (always visible when running) ─────── -->
+        <Button Grid.Row="2"
+                Content="STOP"
+                Style="{StaticResource DangerBtn}"
+                Command="{Binding EmergencyStopCommand}"
+                FontSize="18" Padding="32,12"
+                HorizontalAlignment="Center"
+                Margin="0,16,0,0"
+                Visibility="{Binding State, Converter={StaticResource EnumToVisible}, ConverterParameter=Running}"/>
+    </Grid>
+</UserControl>
