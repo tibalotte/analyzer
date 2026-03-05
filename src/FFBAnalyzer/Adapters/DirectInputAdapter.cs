@@ -74,11 +74,11 @@ public sealed class DirectInputAdapter : IDeviceAdapter
         var effectParams = new EffectParameters
         {
             Flags = EffectFlags.Cartesian | EffectFlags.ObjectOffsets,
-            Duration = (int)SharpDX.DirectInput.Effect.Infinite,
+            Duration = unchecked((int)0xFFFFFFFF),
             SamplePeriod = 0,
             Gain = 10000,
             TriggerButton = -1,
-            TriggerRepeatInterval = (int)SharpDX.DirectInput.Effect.Infinite,
+            TriggerRepeatInterval = unchecked((int)0xFFFFFFFF),
             Axes = new[] { 0 },
             Directions = new[] { 0 },
             Envelope = null,

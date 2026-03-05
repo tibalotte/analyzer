@@ -26,7 +26,7 @@ public sealed class SessionStorageService : IDisposable
 
     public async Task SaveSessionAsync(Session session)
     {
-        await using var tx = await Connection.BeginTransactionAsync();
+        await using var tx = (SqliteTransaction)await Connection.BeginTransactionAsync();
         try
         {
             await Connection.ExecuteAsync(

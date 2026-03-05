@@ -147,7 +147,8 @@ public partial class TestWizardViewModel : ObservableObject
 
     public void Cleanup()
     {
-        _runner?.Progress -= OnProgress;
+        if (_runner != null)
+            _runner.Progress -= OnProgress;
         _runner?.Dispose();
         _runner = null;
         _cts?.Dispose();
