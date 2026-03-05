@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using FFBAnalyzer.Models;
 using SharpDX.DirectInput;
+using Device = FFBAnalyzer.Models.Device;
 
 namespace FFBAnalyzer.Adapters;
 
