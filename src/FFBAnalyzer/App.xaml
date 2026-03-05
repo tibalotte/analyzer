@@ -77,7 +77,76 @@
                 <Setter Property="Background"    Value="{StaticResource BgCard}"/>
                 <Setter Property="Foreground"    Value="{StaticResource TextPrimary}"/>
                 <Setter Property="BorderBrush"   Value="{StaticResource AccentBlue}"/>
+                <Setter Property="BorderThickness" Value="1"/>
                 <Setter Property="Padding"       Value="8,4"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ComboBox">
+                            <Grid>
+                                <Border x:Name="Border"
+                                        Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="4">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="24"/>
+                                        </Grid.ColumnDefinitions>
+                                        <ContentPresenter Grid.Column="0"
+                                                          Content="{TemplateBinding SelectionBoxItem}"
+                                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                                          Margin="{TemplateBinding Padding}"
+                                                          VerticalAlignment="Center"
+                                                          IsHitTestVisible="False"/>
+                                        <Path Grid.Column="1"
+                                              Data="M 0 0 L 4 4 L 8 0 Z"
+                                              Fill="{StaticResource TextMuted}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                                        <ToggleButton Grid.Column="0" Grid.ColumnSpan="2"
+                                                      IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                                      Background="Transparent"
+                                                      BorderThickness="0"
+                                                      Focusable="False"/>
+                                    </Grid>
+                                </Border>
+                                <Popup IsOpen="{TemplateBinding IsDropDownOpen}"
+                                       AllowsTransparency="True"
+                                       Focusable="False"
+                                       Placement="Bottom"
+                                       PopupAnimation="Slide">
+                                    <Border Background="{StaticResource BgCard}"
+                                            BorderBrush="{StaticResource AccentBlue}"
+                                            BorderThickness="1"
+                                            CornerRadius="4"
+                                            MaxHeight="300">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <ItemsPresenter/>
+                                        </ScrollViewer>
+                                    </Border>
+                                </Popup>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- ── ComboBoxItem ──────────────────────────────────────────── -->
+            <Style TargetType="ComboBoxItem">
+                <Setter Property="Background"   Value="{StaticResource BgCard}"/>
+                <Setter Property="Foreground"   Value="{StaticResource TextPrimary}"/>
+                <Setter Property="Padding"      Value="8,6"/>
+                <Style.Triggers>
+                    <Trigger Property="IsHighlighted" Value="True">
+                        <Setter Property="Background" Value="{StaticResource AccentBlue}"/>
+                        <Setter Property="Foreground" Value="White"/>
+                    </Trigger>
+                    <Trigger Property="IsSelected" Value="True">
+                        <Setter Property="Background" Value="{StaticResource AccentBlue}"/>
+                        <Setter Property="Foreground" Value="White"/>
+                    </Trigger>
+                </Style.Triggers>
             </Style>
 
             <!-- ── ListBox ──────────────────────────────────────────────── -->
