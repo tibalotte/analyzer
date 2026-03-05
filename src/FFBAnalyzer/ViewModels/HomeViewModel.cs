@@ -12,6 +12,12 @@ public partial class HomeViewModel : ObservableObject
 
     [ObservableProperty] private ObservableCollection<Device> _devices = new();
     [ObservableProperty] private Device? _selectedDevice;
+
+    partial void OnSelectedDeviceChanged(Device? value)
+    {
+        if (value != null)
+            _ = _main.DeviceAdapter.OpenDeviceAsync(value);
+    }
     [ObservableProperty] private ObservableCollection<Session> _recentSessions = new();
     [ObservableProperty] private string _statusMessage = "Detecting devices…";
     [ObservableProperty] private bool _isBusy;
