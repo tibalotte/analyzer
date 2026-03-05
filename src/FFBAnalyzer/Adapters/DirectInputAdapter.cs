@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using SharpDX.DirectInput;
 using ModelDevice = FFBAnalyzer.Models.Device;
+using TelemetryMode = FFBAnalyzer.Models.TelemetryMode;
 
 namespace FFBAnalyzer.Adapters;
 
