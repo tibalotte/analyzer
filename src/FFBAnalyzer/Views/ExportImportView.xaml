@@ -86,7 +86,7 @@
                          SelectedItem="{Binding SelectedSession}">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel Padding="4,2">
+                            <StackPanel Margin="4,2">
                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextPrimary}"/>
                                 <TextBlock Style="{StaticResource Muted}">

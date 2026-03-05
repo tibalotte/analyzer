@@ -20,7 +20,7 @@
             <SolidColorBrush x:Key="AccentBlue"  Color="#569CD6"/>
             <SolidColorBrush x:Key="AccentGreen" Color="#4EC994"/>
             <SolidColorBrush x:Key="AccentRed"   Color="#F48771"/>
-            <SolidColorBrush x:Key="AccentYellow"Color="#DCDCAA"/>
+            <SolidColorBrush x:Key="AccentYellow" Color="#DCDCAA"/>
             <SolidColorBrush x:Key="TextPrimary" Color="#D4D4D4"/>
             <SolidColorBrush x:Key="TextMuted"   Color="#808080"/>
 
