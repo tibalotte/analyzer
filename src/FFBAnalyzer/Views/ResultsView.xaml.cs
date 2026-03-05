@@ -26,6 +26,6 @@ public partial class ResultsView : UserControl
         };
 
         if (dlg.ShowDialog() == true)
-            await vm.ExportCsvAsyncCommand.ExecuteAsync(dlg.FileName);
+            await vm.ExportCsvCommand.ExecuteAsync(dlg.FileName);
     }
 }
