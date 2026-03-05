@@ -43,11 +43,11 @@ public sealed class SessionStorageService : IDisposable
                 """,
                 new
                 {
-                    session.SessionId,
+                    SessionId = session.SessionId.ToString(),
                     session.Name,
                     session.Description,
-                    session.CreatedAt,
-                    session.UpdatedAt,
+                    CreatedAt = session.CreatedAt.ToString("O"),
+                    UpdatedAt = session.UpdatedAt.ToString("O"),
                     session.FormatVersion,
                     session.AnonymousUserId
                 }, tx);
