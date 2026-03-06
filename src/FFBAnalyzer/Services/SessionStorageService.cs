@@ -53,7 +53,7 @@ public sealed class SessionStorageService : IDisposable
                 }, tx);
 
             foreach (var run in session.Runs)
-                await UpsertRunAsync(run, tx);
+                await UpsertRunAsync(run, (SqliteTransaction)tx);
 
             await tx.CommitAsync();
         }

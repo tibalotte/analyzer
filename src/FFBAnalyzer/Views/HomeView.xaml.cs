@@ -14,6 +14,6 @@ public partial class HomeView : UserControl
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         if (DataContext is HomeViewModel vm)
-            await vm.LoadAsyncCommand.ExecuteAsync(null);
+            await vm.LoadCommand.ExecuteAsync(null);
     }
 }

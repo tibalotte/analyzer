@@ -16,7 +16,7 @@ public partial class ExportImportView : UserControl
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         if (DataContext is ExportImportViewModel vm)
-            await vm.LoadSessionsAsyncCommand.ExecuteAsync(null);
+            await vm.LoadSessionsCommand.ExecuteAsync(null);
     }
 
     private async void OnImportJson(object sender, RoutedEventArgs e)
@@ -28,7 +28,7 @@ public partial class ExportImportView : UserControl
             Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*"
         };
         if (dlg.ShowDialog() == true)
-            await vm.ImportJsonAsyncCommand.ExecuteAsync(dlg.FileName);
+            await vm.ImportJsonCommand.ExecuteAsync(dlg.FileName);
     }
 
     private async void OnImportZip(object sender, RoutedEventArgs e)
@@ -40,7 +40,7 @@ public partial class ExportImportView : UserControl
             Filter = "ZIP files (*.zip)|*.zip|All files (*.*)|*.*"
         };
         if (dlg.ShowDialog() == true)
-            await vm.ImportZipAsyncCommand.ExecuteAsync(dlg.FileName);
+            await vm.ImportZipCommand.ExecuteAsync(dlg.FileName);
     }
 
     private async void OnExportJson(object sender, RoutedEventArgs e)
@@ -60,7 +60,7 @@ public partial class ExportImportView : UserControl
             DefaultExt = ".json"
         };
         if (dlg.ShowDialog() == true)
-            await vm.ExportJsonAsyncCommand.ExecuteAsync(dlg.FileName);
+            await vm.ExportJsonCommand.ExecuteAsync(dlg.FileName);
     }
 
     private async void OnExportZip(object sender, RoutedEventArgs e)
@@ -80,6 +80,6 @@ public partial class ExportImportView : UserControl
             DefaultExt = ".zip"
         };
         if (dlg.ShowDialog() == true)
-            await vm.ExportZipAsyncCommand.ExecuteAsync(dlg.FileName);
+            await vm.ExportZipCommand.ExecuteAsync(dlg.FileName);
     }
 }
