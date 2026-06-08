@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Wave Generator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #166985;
+            --border-color: #0b2730;
+            --card-bg: #f8f8f8;
+            --text-light: #ffffff;
+            --text-dark: #333333;
+        }
+        body {
+            background-color: #0a151a;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 10px;
+            color: var(--text-dark);
+            touch-action: pan-y;
+        }
+        .app-container {
+            background: var(--bg-color);
+            border: 3px solid var(--border-color);
+            border-radius: 35px;
+            max-width: 400px;
+            margin: 0 auto;
+            padding: 20px 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            color: var(--text-light);
+        }
+        h2 { text-align: center; font-weight: bold; margin-bottom: 20px; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
+
+        .btn-main {
+            height: 70px;
+            border: 2px solid #000;
+            border-radius: 12px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--card-bg);
+            color: var(--text-dark);
+            transition: background 0.2s;
+            cursor: pointer;
+            user-select: none;
+            touch-action: none;
+        }
+        .btn-play.active { background: #d4edda; }
+        .btn-play.active .icon { color: #dc3545; }
+        .btn-hold.active { background: #fff3cd; }
+
+        .card-custom {
+            background: var(--card-bg);
+            border: 2px solid #000;
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 15px;
+            color: var(--text-dark);
+        }
+
+        /* Sliders */
+        .sliders-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 14px;
+            margin-bottom: 10px;
+        }
+        .slider-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .slider-wrap.disabled-slider { opacity: 0.38; pointer-events: none; }
+        /* Freq slider dimmed when sweep takes over */
+        .slider-wrap.knob-sweep-active { opacity: 0.5; pointer-events: none; }
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+        .slider-label { font-size: 0.78rem; font-weight: bold; color: #444; }
+        .slider-val   { font-size: 0.75rem; font-family: monospace; color: #555; }
+        .knob-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+            background: #e0e0e0;
+        }
+        .knob-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px; height: 18px;
+            border-radius: 50%;
+            background: var(--thumb-color, #1a7a8a);
+            border: 2px solid #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            cursor: pointer;
+        }
+        .knob-slider::-moz-range-thumb {
+            width: 18px; height: 18px;
+            border-radius: 50%;
+            background: var(--thumb-color, #1a7a8a);
+            border: 2px solid #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            cursor: pointer;
+        }
+        .knob-slider::-webkit-slider-runnable-track {
+            height: 6px;
+            border-radius: 3px;
+        }
+
+        /* Sweep Section */
+        .sweep-section {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+            transition: opacity 0.3s;
+        }
+        .toggle-ios {
+            appearance: none;
+            width: 50px; height: 28px;
+            background: #55808f;
+            border-radius: 14px;
+            position: relative;
+            outline: none;
+            cursor: pointer;
+            transition: 0.3s;
+            flex-shrink: 0;
+        }
+        .toggle-ios:checked { background: #2dce6e; }
+        .toggle-ios::after {
+            content: '';
+            position: absolute;
+            top: 2px; left: 2px;
+            width: 24px; height: 24px;
+            background: white;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+        .toggle-ios:checked::after { transform: translateX(22px); }
+
+        .dual-slider-wrap {
+            position: relative;
+            height: 40px;
+            background: #fff;
+            border: 2px solid #000;
+            border-radius: 20px;
+            margin: 15px 0;
+            padding: 0 12px;
+            touch-action: none;
+        }
+        .ds-track {
+            position: absolute;
+            top: 18px; left: 12px; right: 12px;
+            height: 4px;
+            background: #ddd;
+        }
+        .ds-fill {
+            position: absolute;
+            top: 18px; height: 4px;
+            background: #2a6aaa;
+            cursor: grab;
+        }
+        .ds-handle {
+            position: absolute;
+            top: 8px;
+            width: 24px; height: 24px;
+            background: #fff;
+            border: 2px solid #000;
+            border-radius: 50%;
+            transform: translateX(-50%);
+            cursor: ew-resize;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            z-index: 2;
+        }
+        .sweep-controls {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+        }
+
+        /* Horizontal Sliders */
+        .horiz-slider-wrap {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .hs-btn {
+            width: 36px; height: 36px;
+            background: #eee;
+            border: 2px solid #000;
+            border-radius: 6px;
+            font-weight: bold;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            touch-action: none;
+        }
+        .hs-btn:active { background: #ccc; }
+        .hs-input {
+            flex-grow: 1;
+            margin: 0 10px;
+        }
+        .hs-label-row {
+            display: flex; justify-content: space-between;
+            font-size: 0.85rem; font-weight: bold;
+            margin-bottom: 2px; margin-top: 8px;
+        }
+        .hs-val { font-family: monospace; color: #555; }
+
+        /* Visualizers */
+        .vis-container {
+            display: flex; gap: 10px;
+            height: 80px;
+            margin-bottom: 15px;
+        }
+        .scope-canvas {
+            flex-grow: 1;
+            background: #000;
+            border: 2px solid #000;
+            border-radius: 8px;
+        }
+        .vu-canvas {
+            width: 30px;
+            background: #ddd;
+            border: 2px solid #000;
+            border-radius: 8px;
+        }
+
+        #deviceSelectorWrap {
+            margin-top: 15px;
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+        }
+        select.form-select { font-size: 0.9rem; }
+
+        /* Presets */
+        .presets-section {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 15px;
+        }
+        .presets-section .fw-bold { color: var(--text-light); margin-bottom: 8px; display: block; }
+        .preset-row {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .preset-btn {
+            padding: 5px 10px;
+            background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: background 0.15s;
+            user-select: none;
+        }
+        .preset-btn:hover, .preset-btn:active { background: rgba(255,255,255,0.3); }
+        .preset-btn.preset-save {
+            background: rgba(45,206,110,0.25);
+            border-color: #2dce6e;
+        }
+        .preset-name-input {
+            flex-grow: 1;
+            min-width: 80px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            font-size: 0.8rem;
+        }
+        .shortcut-hint {
+            text-align: center;
+            font-size: 0.72rem;
+            color: rgba(255,255,255,0.45);
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <h2>Wave Generator</h2>
+
+    <div class="row g-2 mb-3">
+        <div class="col-6">
+            <div class="btn-main btn-play" id="btnPlay">
+                <span class="icon me-2">▶</span> <span id="playLabel">Play</span>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="btn-main btn-hold" id="btnHold">
+                <span class="me-2">⏸</span> Hold
+            </div>
+        </div>
+    </div>
+    <div class="shortcut-hint">Espace = Play/Stop &nbsp;|&nbsp; H = Hold</div>
+
+    <div class="vis-container" style="margin-top:8px;">
+        <canvas class="scope-canvas" id="scopeCanvas"></canvas>
+        <canvas class="vu-canvas" id="vuCanvas"></canvas>
+    </div>
+
+    <div class="card-custom">
+        <div class="sliders-grid" id="knobsGrid"></div>
+    </div>
+
+    <div class="sweep-section">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="fw-bold">⟷ Freq Sweep</div>
+            <input type="checkbox" class="toggle-ios" id="sweepToggle">
+        </div>
+        <div id="sweepBody" style="opacity: 0.5; pointer-events: none;">
+            <div class="text-center font-monospace small" id="sweepLabel">50 Hz - 1200 Hz</div>
+            <div class="dual-slider-wrap" id="sweepSlider">
+                <div class="ds-track"></div>
+                <div class="ds-fill" id="sweepFill"></div>
+                <div class="ds-handle" id="sweepH1"></div>
+                <div class="ds-handle" id="sweepH2"></div>
+            </div>
+            <div class="sweep-controls">
+                <label class="d-flex align-items-center gap-2">
+                    <input type="checkbox" class="toggle-ios" id="invertToggle">
+                    <span>⇄ Inverser</span>
+                </label>
+                <label class="d-flex align-items-center gap-2">
+                    <input type="checkbox" class="toggle-ios" id="doubleToggle">
+                    <span>⋀ Double</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="card-custom">
+        <div id="slidersWrap"></div>
+    </div>
+
+    <!-- Presets -->
+    <div class="presets-section">
+        <span class="fw-bold">🎛 Préréglages</span>
+        <div class="preset-row mb-2" id="builtinPresets"></div>
+        <div class="preset-row" id="userPresets"></div>
+        <div class="preset-row mt-2">
+            <input type="text" class="preset-name-input" id="presetNameInput" placeholder="Nom du préréglage…">
+            <div class="preset-btn preset-save" id="btnSavePreset">💾 Sauvegarder</div>
+        </div>
+    </div>
+
+    <div id="deviceSelectorWrap">
+        <label class="mb-1 d-block">Sortie Audio :</label>
+        <select class="form-select" id="deviceSelect">
+            <option value="">Sélection par défaut</option>
+        </select>
+        <div class="mt-1 small text-light" id="iosDeviceMsg" style="display:none;">
+            Le son est dirigé vers le périphérique iOS par défaut.
+        </div>
+    </div>
+</div>
+
+<script>
+// --- CORE MATH & UTILS ---
+function warpPhase(t, r) {
+    const r2 = r*r, r3 = r2*r;
+    if(t < r) {
+        const a1 = (2*r - 1) / r3;
+        const b1 = -3*(2*r - 1) / (2*r2);
+        return ((a1*t + b1)*t + 1)*t;
+    } else {
+        const u = (t - r) / (1 - r);
+        const a2 = 1 - 2*r;
+        const b2 = (6*r - 3) / 2;
+        const c2 = 1 - r;
+        return (((a2*u + b2)*u + c2)*u) + 0.5;
+    }
+}
+
+function subOctaveHMax(fMain) {
+    const cutoff = 200;
+    const Sm = 1 / (1 + (fMain/cutoff)**2);
+    const Ss = 1 / (1 + ((fMain/2)/cutoff)**2);
+    const r = Sm / Ss;
+    return r / (1 + r);
+}
+
+// --- STATE MANAGEMENT ---
+const STORAGE_KEY = 'stimgen_v10_wave_generator';
+const USER_PRESETS_KEY = 'stimgen_v10_user_presets';
+
+const defaultState = {
+    playing: false, hold: false,
+    freq: 700, volume: 0, rythm: 0.5, depth: 0, ratio: 50,
+    sweepActive: false, sweepLo: 500, sweepHi: 900, invertSweep: false, doubleSweep: false,
+    balance: 0, phase: 0, detuneOffset: 0, detuneDepth: 100, subOctave: 0
+};
+
+// Built-in presets
+const BUILTIN_PRESETS = [
+    { name: 'Défaut', state: { freq: 700, volume: 60, rythm: 0.5, depth: 50, ratio: 50, balance: 0, phase: 0, detuneOffset: 0, detuneDepth: 0, subOctave: 0, sweepActive: false } },
+    { name: 'Delta', state: { freq: 200, volume: 60, rythm: 2, depth: 80, ratio: 50, balance: 0, phase: 0, detuneOffset: 2, detuneDepth: 30, subOctave: 0, sweepActive: false } },
+    { name: 'Theta', state: { freq: 432, volume: 60, rythm: 6, depth: 70, ratio: 50, balance: 0, phase: 0, detuneOffset: 6, detuneDepth: 20, subOctave: 0, sweepActive: false } },
+    { name: 'Alpha', state: { freq: 528, volume: 60, rythm: 10, depth: 60, ratio: 50, balance: 0, phase: 0, detuneOffset: 10, detuneDepth: 20, subOctave: 0, sweepActive: false } },
+    { name: 'Sweep Grave', state: { freq: 200, volume: 60, rythm: 0.2, depth: 40, ratio: 50, balance: 0, phase: 0, detuneOffset: 0, detuneDepth: 0, subOctave: 60, sweepActive: true, sweepLo: 80, sweepHi: 400 } },
+];
+
+let state = { ...defaultState };
+
+function loadState() {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) Object.assign(state, JSON.parse(stored));
+    } catch (e) {}
+    state.playing = false;
+    state.hold = false;
+    state.volume = Math.max(0, Math.min(100, state.volume || 0));
+    state.sweepLo = Math.max(50, Math.min(1190, state.sweepLo));
+    state.sweepHi = Math.max(state.sweepLo + 10, Math.min(1200, state.sweepHi));
+}
+
+function saveState() {
+    const toSave = { ...state };
+    delete toSave.playing;
+    delete toSave.hold;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+}
+
+function loadUserPresets() {
+    try { return JSON.parse(localStorage.getItem(USER_PRESETS_KEY) || '[]'); } catch(e) { return []; }
+}
+function saveUserPresets(presets) {
+    localStorage.setItem(USER_PRESETS_KEY, JSON.stringify(presets));
+}
+
+function applyPreset(ps) {
+    const wasPlaying = state.playing;
+    const wasHold = state.hold;
+    Object.assign(state, ps);
+    state.playing = wasPlaying;
+    state.hold = wasHold;
+    state.sweepLo = Math.max(50, Math.min(1190, state.sweepLo || 500));
+    state.sweepHi = Math.max(state.sweepLo + 10, Math.min(1200, state.sweepHi || 900));
+    saveState();
+    updateAllUI();
+    if(audioInit) {
+        updateModBuffer();
+        updateAudioParams();
+    }
+}
+
+// --- AUDIO SYSTEM ---
+let ctx = null, audioInit = false;
+let merger, masterG, monitorL, monitorR, analyserL, analyserR, analyserDetune;
+let carrierOsc, carrierMix1, carrierOscDetune, carrierMix2, carrierOscH2, harmonicGain;
+let balL, balR, amGainL, amGainR, depthGainL, depthGainR, amGainDetune;
+let modOsc, delayModL, delayModR, sweepShaper, sweepLFOGain, subSweepGain, detuneConstant;
+
+function initAudio() {
+    if(audioInit) return;
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    ctx = new AudioCtx();
+
+    merger = ctx.createChannelMerger(2);
+    masterG = ctx.createGain();
+    masterG.gain.value = 0;
+    monitorL = ctx.createGain();
+    monitorR = ctx.createGain();
+
+    merger.connect(masterG);
+    masterG.connect(ctx.destination);
+    masterG.connect(monitorL);
+    masterG.connect(monitorR);
+
+    analyserL = ctx.createAnalyser(); analyserL.fftSize = 2048;
+    analyserR = ctx.createAnalyser(); analyserR.fftSize = 2048;
+    analyserDetune = ctx.createAnalyser(); analyserDetune.fftSize = 2048;
+    monitorL.connect(analyserL);
+    monitorR.connect(analyserR);
+
+    carrierOsc = ctx.createOscillator();
+    carrierMix1 = ctx.createGain();
+    carrierOsc.connect(carrierMix1);
+
+    carrierOscDetune = ctx.createOscillator();
+    carrierMix2 = ctx.createGain();
+    carrierOscDetune.connect(carrierMix2);
+
+    carrierOscH2 = ctx.createOscillator();
+    harmonicGain = ctx.createGain();
+    carrierOscH2.connect(harmonicGain);
+
+    const mainSum = ctx.createGain();
+    carrierMix1.connect(mainSum);
+    carrierMix2.connect(mainSum);
+    harmonicGain.connect(mainSum);
+
+    amGainL = ctx.createGain(); amGainR = ctx.createGain();
+    balL = ctx.createGain(); balR = ctx.createGain();
+
+    mainSum.connect(amGainL); amGainL.connect(balL); balL.connect(merger, 0, 0);
+    mainSum.connect(amGainR); amGainR.connect(balR); balR.connect(merger, 0, 1);
+
+    delayModL = ctx.createDelay(5.0);
+    delayModR = ctx.createDelay(5.0);
+    depthGainL = ctx.createGain();
+    depthGainR = ctx.createGain();
+
+    delayModL.connect(depthGainL);
+    delayModR.connect(depthGainR);
+    depthGainL.connect(amGainL.gain);
+    depthGainR.connect(amGainR.gain);
+
+    amGainDetune = ctx.createGain();
+    amGainDetune.gain.value = 0;
+    carrierMix2.connect(amGainDetune);
+    amGainDetune.connect(analyserDetune);
+    depthGainL.connect(amGainDetune.gain);
+
+    sweepShaper = ctx.createWaveShaper();
+    sweepLFOGain = ctx.createGain();
+    subSweepGain = ctx.createGain(); subSweepGain.gain.value = 0.5;
+
+    sweepShaper.connect(sweepLFOGain);
+    sweepLFOGain.connect(carrierOsc.frequency);
+    sweepLFOGain.connect(carrierOscDetune.frequency);
+    sweepLFOGain.connect(subSweepGain);
+    subSweepGain.connect(carrierOscH2.frequency);
+
+    detuneConstant = ctx.createConstantSource();
+    detuneConstant.connect(carrierOscDetune.frequency);
+
+    carrierOsc.start();
+    carrierOscDetune.start();
+    carrierOscH2.start();
+    detuneConstant.start();
+
+    updateModBuffer();
+    updateAudioParams();
+    audioInit = true;
+}
+
+let currentPhaseIntegrator = 0;
+function updateModBuffer() {
+    if(!ctx) return;
+    const size = ctx.sampleRate;
+    const buf = ctx.createBuffer(1, size, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    const ratio = state.ratio / 100;
+    for(let i=0; i<size; i++) {
+        data[i] = Math.sin(2 * Math.PI * warpPhase(i/size, ratio));
+    }
+
+    const newOsc = ctx.createBufferSource();
+    newOsc.buffer = buf;
+    newOsc.loop = true;
+    newOsc.playbackRate.value = state.hold ? 0 : state.rythm;
+
+    newOsc.connect(sweepShaper);
+    newOsc.connect(delayModL);
+    newOsc.connect(delayModR);
+
+    const now = ctx.currentTime;
+    const offset = (currentPhaseIntegrator % 1.0) * buf.duration;
+    newOsc.start(now, offset);
+    if(modOsc) {
+        modOsc.stop(now);
+        // Disconnect to free resources after stopping
+        try { modOsc.disconnect(); } catch(e) {}
+    }
+    modOsc = newOsc;
+}
+
+function updateAudioParams() {
+    if(!ctx) return;
+    const now = ctx.currentTime;
+
+    masterG.gain.setTargetAtTime(state.playing ? state.volume / 100 : 0, now, 0.05);
+    if(modOsc) modOsc.playbackRate.setTargetAtTime(state.hold ? 0 : state.rythm, now, 0.05);
+
+    const centerFreq = state.sweepActive ? (state.sweepLo + state.sweepHi)/2 : state.freq;
+    carrierOsc.frequency.setTargetAtTime(centerFreq, now, 0.05);
+    carrierOscH2.frequency.setTargetAtTime(centerFreq / 2, now, 0.05);
+    carrierOscDetune.frequency.setTargetAtTime(centerFreq, now, 0.05);
+    detuneConstant.offset.setTargetAtTime(state.detuneOffset, now, 0.05);
+
+    const hRaw = state.subOctave / 100;
+    const h = (centerFreq < 100) ? 0 : hRaw * subOctaveHMax(centerFreq);
+    const d = state.detuneDepth / 100;
+
+    carrierMix1.gain.setTargetAtTime((1 - h) * (1 - d/2), now, 0.05);
+    carrierMix2.gain.setTargetAtTime((1 - h) * (d/2), now, 0.05);
+    harmonicGain.gain.setTargetAtTime(h, now, 0.05);
+
+    const depth = state.depth / 100;
+    const amBase = 1.0 - depth/2;
+    amGainL.gain.setTargetAtTime(amBase, now, 0.05);
+    amGainR.gain.setTargetAtTime(amBase, now, 0.05);
+    if(amGainDetune) amGainDetune.gain.setTargetAtTime(amBase, now, 0.05);
+    depthGainL.gain.setTargetAtTime(depth/2, now, 0.05);
+    depthGainR.gain.setTargetAtTime(depth/2, now, 0.05);
+
+    balL.gain.setTargetAtTime(state.balance > 0 ? 1 - state.balance/100 : 1, now, 0.05);
+    balR.gain.setTargetAtTime(state.balance < 0 ? 1 + state.balance/100 : 1, now, 0.05);
+
+    let delaySecs = state.rythm > 0.01 ? (Math.abs(state.phase)/360) / state.rythm : 0;
+    delaySecs = Math.min(delaySecs, 5.0);
+    delayModL.delayTime.setTargetAtTime(state.phase < 0 ? delaySecs : 0, now, 0.05);
+    delayModR.delayTime.setTargetAtTime(state.phase > 0 ? delaySecs : 0, now, 0.05);
+
+    let sr = state.sweepActive ? (state.sweepHi - state.sweepLo)/2 : 0;
+    if(state.invertSweep) sr = -sr;
+    sweepLFOGain.gain.setTargetAtTime(sr, now, 0.05);
+
+    if(state.doubleSweep && state.sweepActive) {
+        const dCurve = new Float32Array(2048);
+        for(let i=0; i<2048; i++) dCurve[i] = 2 * Math.abs((i/2047)*2 - 1) - 1;
+        sweepShaper.curve = dCurve;
+    } else {
+        const lCurve = new Float32Array(2);
+        lCurve[0] = -1; lCurve[1] = 1;
+        sweepShaper.curve = lCurve;
+    }
+}
+
+// --- UI COMPONENTS ---
+
+// 1. Sliders
+const knobsDef = [
+    { id: 'freq',     label: 'Fréquence', min: 50,  max: 1200, step: 10,   color: '#1a7a8a', format: v => v+' Hz' },
+    { id: 'volume',   label: 'Volume',    min: 0,   max: 100,  step: 1,    color: '#b87830', format: v => v+' %' },
+    { id: 'rythm',    label: 'Rythm',     min: 0,   max: 5,    step: 0.05, color: '#2a6aaa', format: v => v.toFixed(2)+' Hz' },
+    { id: 'depth',    label: 'Depth',     min: 0,   max: 100,  step: 1,    color: '#2a8a5a', format: v => v+' %' },
+    { id: 'emphasis', label: 'Emphasis',  min: 0,   max: 100,  step: 1,    color: '#7a4a8a', format: v => v+' %', disabled: true },
+    { id: 'ratio',    label: 'Ratio',     min: 20,  max: 80,   step: 1,    color: '#aa5a4a', format: v => v+'/'+(100-v) }
+];
+const knobRefs = {};
+
+function renderKnobs() {
+    const grid = document.getElementById('knobsGrid');
+    grid.innerHTML = '';
+    knobsDef.forEach(k => {
+        const wrap = document.createElement('div');
+        wrap.className = `slider-wrap${k.disabled ? ' disabled-slider' : ''}`;
+        wrap.id = `wrap_${k.id}`;
+
+        const header = document.createElement('div');
+        header.className = 'slider-header';
+
+        const lbl = document.createElement('span');
+        lbl.className = 'slider-label';
+        lbl.innerText = k.label;
+
+        const val = document.createElement('span');
+        val.className = 'slider-val';
+        val.id = `val_${k.id}`;
+
+        header.appendChild(lbl);
+        header.appendChild(val);
+
+        const input = document.createElement('input');
+        input.type = 'range';
+        input.className = 'knob-slider';
+        input.min = k.min;
+        input.max = k.max;
+        input.step = k.step;
+        input.value = state[k.id];
+        input.style.setProperty('--thumb-color', k.color);
+
+        const updateTrack = (v) => {
+            const cur = v !== undefined ? v : parseFloat(input.value);
+            const pct = ((cur - k.min) / (k.max - k.min)) * 100;
+            input.style.background = `linear-gradient(to right, ${k.color} ${pct}%, #e0e0e0 ${pct}%)`;
+        };
+        updateTrack();
+
+        input.addEventListener('input', () => {
+            if(k.disabled || (k.id === 'freq' && state.sweepActive)) return;
+            let newVal = parseFloat(input.value);
+            newVal = Math.round(newVal / k.step) * k.step;
+            state[k.id] = newVal;
+            if(k.id === 'ratio') updateModBuffer();
+            updateAudioParams();
+            updateTrack();
+            saveState();
+            updateDisplays();
+        });
+
+        wrap.appendChild(header);
+        wrap.appendChild(input);
+        grid.appendChild(wrap);
+
+        knobRefs[k.id] = { input, valDiv: val, def: k, updateTrack };
+        drawKnob(k.id);
+    });
+}
+
+function drawKnob(id, overrideVal) {
+    const r = knobRefs[id];
+    if(!r) return;
+    const val = overrideVal !== undefined ? overrideVal : state[id];
+    r.valDiv.innerText = r.def.format(val);
+    // Always sync slider position and track fill
+    r.input.value = (overrideVal !== undefined) ? overrideVal : val;
+    r.updateTrack(val);
+}
+
+// 2. Horizontal Sliders
+const hsDef = [
+    { id: 'balance',      label: 'Balance',            min: -100, max: 100,  step: 1   },
+    { id: 'phase',        label: 'Déphasage L/R',      min: -45,  max: 45,   step: 1   },
+    { id: 'detuneOffset', label: 'Détune Offset',      min: -2.5, max: 2.5,  step: 0.1 },
+    { id: 'detuneDepth',  label: 'Profondeur Détune',  min: 0,    max: 100,  step: 1   },
+    { id: 'subOctave',    label: 'Sous-octave (Bass)', min: 0,    max: 100,  step: 1   }
+];
+
+function formatHSVal(id, v) {
+    if(id === 'balance') return v === 0 ? 'Centre' : (v < 0 ? `◀ L ${Math.abs(v)}` : `R ${v} ▶`);
+    if(id === 'phase') return v === 0 ? 'Synchro' : (v > 0 ? `L mène ${v}°` : `R mène ${Math.abs(v)}°`);
+    if(id === 'detuneOffset') return v === 0 ? 'Synchro' : `${v>0?'+':''}${v.toFixed(1)} Hz (${Math.abs(v).toFixed(1)} battement/s)`;
+    if(id === 'detuneDepth') return v + ' %';
+    if(id === 'subOctave') {
+        const cf = state.sweepActive ? (state.sweepLo+state.sweepHi)/2 : state.freq;
+        if(cf < 100) return '(muet — porteuse trop basse)';
+        return `${v} % (${(cf/2).toFixed(0)} Hz)`;
+    }
+    return v;
+}
+
+// Hold repeat for +/- buttons
+function setupHoldRepeat(el, fn) {
+    let timer = null;
+    const start = (e) => {
+        e.preventDefault();
+        fn();
+        timer = setTimeout(function repeat() { fn(); timer = setTimeout(repeat, 80); }, 400);
+    };
+    const stop = () => { if(timer) { clearTimeout(timer); timer = null; } };
+    el.addEventListener('mousedown', start);
+    el.addEventListener('touchstart', start, { passive: false });
+    window.addEventListener('mouseup', stop);
+    window.addEventListener('touchend', stop);
+}
+
+function renderSliders() {
+    const wrap = document.getElementById('slidersWrap');
+    wrap.innerHTML = '';
+    hsDef.forEach(s => {
+        const row = document.createElement('div');
+
+        const lblRow = document.createElement('div'); lblRow.className = 'hs-label-row';
+        const lbl = document.createElement('div'); lbl.innerText = s.label;
+        const val = document.createElement('div'); val.className = 'hs-val'; val.id = `hsval_${s.id}`;
+        lblRow.appendChild(lbl); lblRow.appendChild(val);
+
+        const cWrap = document.createElement('div'); cWrap.className = 'horiz-slider-wrap';
+        const btnM = document.createElement('div'); btnM.className = 'hs-btn'; btnM.innerText = '−';
+        const btnP = document.createElement('div'); btnP.className = 'hs-btn'; btnP.innerText = '+';
+        const range = document.createElement('input'); range.type = 'range'; range.className = 'hs-input form-range';
+        range.min = s.min; range.max = s.max; range.step = s.step;
+
+        cWrap.appendChild(btnM); cWrap.appendChild(range); cWrap.appendChild(btnP);
+        row.appendChild(lblRow); row.appendChild(cWrap);
+        wrap.appendChild(row);
+
+        const update = (newV) => {
+            newV = Math.round(Math.max(s.min, Math.min(s.max, newV)) / s.step) * s.step;
+            if(state[s.id] !== newV) {
+                state[s.id] = newV;
+                range.value = newV;
+                val.innerText = formatHSVal(s.id, newV);
+                if(audioInit) updateAudioParams();
+                saveState();
+            }
+        };
+
+        range.addEventListener('input', e => update(parseFloat(e.target.value)));
+        setupHoldRepeat(btnM, () => update(state[s.id] - s.step));
+        setupHoldRepeat(btnP, () => update(state[s.id] + s.step));
+
+        range.value = state[s.id];
+        val.innerText = formatHSVal(s.id, state[s.id]);
+    });
+}
+
+function updateDisplays() {
+    hsDef.forEach(s => {
+        const el = document.getElementById(`hsval_${s.id}`);
+        if(el) el.innerText = formatHSVal(s.id, state[s.id]);
+    });
+}
+
+function updateAllUI() {
+    // Sync all sliders and knobs with current state
+    knobsDef.forEach(k => {
+        const r = knobRefs[k.id];
+        if(r && !k.disabled) {
+            r.input.value = state[k.id] !== undefined ? state[k.id] : r.def.min;
+            drawKnob(k.id);
+        }
+    });
+    hsDef.forEach(s => {
+        const range = document.querySelector(`#slidersWrap .hs-input[min="${s.min}"]`);
+        // Fallback: re-render sliders is simpler than querying
+    });
+    renderSliders();
+    updateSweepUI();
+    document.getElementById('invertToggle').checked = !!state.invertSweep;
+    document.getElementById('doubleToggle').checked = !!state.doubleSweep;
+}
+
+// 3. Sweep Logic
+const sWrap = document.getElementById('sweepSlider');
+const sFill = document.getElementById('sweepFill');
+const sH1 = document.getElementById('sweepH1');
+const sH2 = document.getElementById('sweepH2');
+const sBody = document.getElementById('sweepBody');
+const sToggle = document.getElementById('sweepToggle');
+
+function updateSweepUI() {
+    const minF = 50, maxF = 1200;
+    const range = maxF - minF;
+    const w = sWrap.offsetWidth - 24;
+
+    const p1 = (state.sweepLo - minF)/range;
+    const p2 = (state.sweepHi - minF)/range;
+
+    sH1.style.left = `calc(12px + ${p1 * w}px)`;
+    sH2.style.left = `calc(12px + ${p2 * w}px)`;
+    sFill.style.left = `calc(12px + ${p1 * w}px)`;
+    sFill.style.width = `${(p2 - p1) * w}px`;
+
+    document.getElementById('sweepLabel').innerText = `${state.sweepLo} Hz - ${state.sweepHi} Hz`;
+
+    sBody.style.opacity = state.sweepActive ? '1' : '0.5';
+    sBody.style.pointerEvents = state.sweepActive ? 'auto' : 'none';
+    sToggle.checked = state.sweepActive;
+
+    const fWrap = document.getElementById('wrap_freq');
+    if(fWrap) {
+        if(state.sweepActive) fWrap.classList.add('knob-sweep-active');
+        else {
+            fWrap.classList.remove('knob-sweep-active');
+            drawKnob('freq');
+        }
+    }
+}
+
+function bindSweep() {
+    let activeDrag = null, startX, startLo, startHi;
+    const minF = 50, maxF = 1200;
+
+    const onStart = (type, e) => {
+        activeDrag = type;
+        startX = e.touches ? e.touches[0].clientX : e.clientX;
+        startLo = state.sweepLo; startHi = state.sweepHi;
+        e.preventDefault();
+    };
+    const onMove = (e) => {
+        if(!activeDrag) return;
+        const x = e.touches ? e.touches[0].clientX : e.clientX;
+        const dx = x - startX;
+        const w = sWrap.offsetWidth - 24;
+        const dFreq = Math.round((dx / w) * (maxF - minF) / 10) * 10;
+
+        if(activeDrag === 'h1') {
+            state.sweepLo = Math.max(minF, Math.min(state.sweepHi - 10, startLo + dFreq));
+        } else if(activeDrag === 'h2') {
+            state.sweepHi = Math.max(state.sweepLo + 10, Math.min(maxF, startHi + dFreq));
+        } else if(activeDrag === 'fill') {
+            const span = startHi - startLo;
+            let nLo = startLo + dFreq;
+            let nHi = startHi + dFreq;
+            if(nLo < minF) { nLo = minF; nHi = nLo + span; }
+            if(nHi > maxF) { nHi = maxF; nLo = nHi - span; }
+            state.sweepLo = nLo; state.sweepHi = nHi;
+        }
+        updateSweepUI();
+        if(audioInit) updateAudioParams();
+        updateDisplays();
+    };
+    const onEnd = () => { if(activeDrag) { activeDrag = null; saveState(); } };
+
+    sH1.addEventListener('mousedown', e => onStart('h1', e));
+    sH2.addEventListener('mousedown', e => onStart('h2', e));
+    sFill.addEventListener('mousedown', e => onStart('fill', e));
+    sH1.addEventListener('touchstart', e => onStart('h1', e), {passive: false});
+    sH2.addEventListener('touchstart', e => onStart('h2', e), {passive: false});
+    sFill.addEventListener('touchstart', e => onStart('fill', e), {passive: false});
+
+    window.addEventListener('mousemove', onMove, {passive: false});
+    window.addEventListener('touchmove', onMove, {passive: false});
+    window.addEventListener('mouseup', onEnd);
+    window.addEventListener('touchend', onEnd);
+
+    sToggle.addEventListener('change', e => {
+        state.sweepActive = e.target.checked;
+        updateSweepUI(); if(audioInit) updateAudioParams(); updateDisplays(); saveState();
+    });
+    document.getElementById('invertToggle').addEventListener('change', e => {
+        state.invertSweep = e.target.checked; if(audioInit) updateAudioParams(); saveState();
+    });
+    document.getElementById('doubleToggle').addEventListener('change', e => {
+        state.doubleSweep = e.target.checked; if(audioInit) updateAudioParams(); saveState();
+    });
+}
+
+// 4. Presets
+function renderPresets() {
+    const builtinRow = document.getElementById('builtinPresets');
+    builtinRow.innerHTML = '';
+    BUILTIN_PRESETS.forEach(p => {
+        const btn = document.createElement('div');
+        btn.className = 'preset-btn';
+        btn.innerText = p.name;
+        btn.addEventListener('click', () => applyPreset(p.state));
+        builtinRow.appendChild(btn);
+    });
+    renderUserPresets();
+}
+
+function renderUserPresets() {
+    const userRow = document.getElementById('userPresets');
+    userRow.innerHTML = '';
+    const presets = loadUserPresets();
+    presets.forEach((p, i) => {
+        const btn = document.createElement('div');
+        btn.className = 'preset-btn';
+        btn.innerHTML = `${p.name} <span style="opacity:0.6;font-size:0.7em;cursor:pointer" data-del="${i}">✕</span>`;
+        btn.addEventListener('click', (e) => {
+            if(e.target.dataset.del !== undefined) {
+                const list = loadUserPresets();
+                list.splice(parseInt(e.target.dataset.del), 1);
+                saveUserPresets(list);
+                renderUserPresets();
+            } else {
+                applyPreset(p.state);
+            }
+        });
+        userRow.appendChild(btn);
+    });
+}
+
+document.getElementById('btnSavePreset').addEventListener('click', () => {
+    const name = document.getElementById('presetNameInput').value.trim();
+    if(!name) return;
+    const list = loadUserPresets();
+    const ps = { ...state };
+    delete ps.playing; delete ps.hold;
+    list.push({ name, state: ps });
+    saveUserPresets(list);
+    document.getElementById('presetNameInput').value = '';
+    renderUserPresets();
+});
+
+// --- ANIMATION & VISUALIZERS ---
+let lastTime = performance.now();
+const sCtx = document.getElementById('scopeCanvas').getContext('2d');
+const vCtx = document.getElementById('vuCanvas').getContext('2d');
+const bufL = new Float32Array(2048);
+const bufR = new Float32Array(2048);
+const bufD = new Float32Array(2048);
+
+function initCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    const c1 = document.getElementById('scopeCanvas');
+    const c2 = document.getElementById('vuCanvas');
+    // Use actual rendered width or fall back to natural width
+    const w1 = c1.offsetWidth || c1.clientWidth || 300;
+    const w2 = c2.offsetWidth || c2.clientWidth || 30;
+    c1.width = w1 * dpr; c1.height = 80 * dpr;
+    c2.width = w2 * dpr; c2.height = 80 * dpr;
+    sCtx.scale(dpr, dpr); vCtx.scale(dpr, dpr);
+}
+
+function drawScope() {
+    const w = document.getElementById('scopeCanvas').offsetWidth || 300;
+    const h = 80;
+
+    sCtx.fillStyle = '#0a151a';
+    sCtx.fillRect(0, 0, w, h);
+
+    sCtx.strokeStyle = 'rgba(255,255,255,0.1)';
+    sCtx.lineWidth = 1;
+    sCtx.beginPath();
+    for(let x=0; x<w; x+=28) { sCtx.moveTo(x,0); sCtx.lineTo(x,h); }
+    for(let y=0; y<h; y+=28) { sCtx.moveTo(0,y); sCtx.lineTo(w,y); }
+    sCtx.stroke();
+
+    if(!ctx || !state.playing) return;
+
+    analyserL.getFloatTimeDomainData(bufL);
+    analyserR.getFloatTimeDomainData(bufR);
+
+    const drawTrace = (buf, color, lw) => {
+        sCtx.beginPath();
+        sCtx.strokeStyle = color;
+        sCtx.lineWidth = lw;
+        for(let i=0; i<buf.length; i+=4) {
+            const x = (i / buf.length) * w;
+            const y = (0.5 - buf[i]*0.5) * h;
+            if(i===0) sCtx.moveTo(x,y); else sCtx.lineTo(x,y);
+        }
+        sCtx.stroke();
+    };
+
+    if(state.detuneDepth > 0) {
+        analyserDetune.getFloatTimeDomainData(bufD);
+        const hRaw2 = state.subOctave / 100;
+        const centerFreq2 = state.sweepActive ? (state.sweepLo + state.sweepHi)/2 : state.freq;
+        const h2 = (centerFreq2 < 100) ? 0 : hRaw2 * subOctaveHMax(centerFreq2);
+        const d2 = state.detuneDepth / 100;
+        const mix2Scale = (1 - h2) * (d2 / 2) * (state.volume / 100);
+        for(let i = 0; i < bufD.length; i++) bufD[i] *= mix2Scale;
+        drawTrace(bufD, 'rgba(217, 127, 42, 0.7)', 1.5);
+    }
+    drawTrace(bufL, '#2a6aaa', 2);
+    drawTrace(bufR, '#dc3545', 2);
+
+    // VU Meters
+    let pkL = 0, pkR = 0;
+    for(let i=0; i<bufL.length; i++) {
+        const vL = Math.abs(bufL[i]); if(vL > pkL) pkL = vL;
+        const vR = Math.abs(bufR[i]); if(vR > pkR) pkR = vR;
+    }
+    const vw = document.getElementById('vuCanvas').offsetWidth || 30;
+    vCtx.clearRect(0,0,vw,h);
+    vCtx.fillStyle = '#2a6aaa'; vCtx.fillRect(2, h - pkL*h, (vw/2)-3, pkL*h);
+    vCtx.fillStyle = '#dc3545'; vCtx.fillRect(vw/2 + 1, h - pkR*h, (vw/2)-3, pkR*h);
+}
+
+function animate() {
+    const now = performance.now();
+    const dt = (now - lastTime)/1000;
+    lastTime = now;
+
+    if(state.playing && !state.hold) {
+        currentPhaseIntegrator += dt * state.rythm;
+        currentPhaseIntegrator %= 1.0;
+    }
+
+    if(state.sweepActive && state.playing && !state.hold) {
+        let lfoVal = Math.sin(2 * Math.PI * warpPhase(currentPhaseIntegrator, state.ratio/100));
+        if(state.doubleSweep) lfoVal = 2 * Math.abs(lfoVal) - 1;
+        if(state.invertSweep) lfoVal = -lfoVal;
+
+        const center = (state.sweepLo + state.sweepHi)/2;
+        const range = (state.sweepHi - state.sweepLo)/2;
+        const instFreq = center + range * lfoVal;
+        // Update freq knob display without locking the slider input value
+        const r = knobRefs['freq'];
+        if(r) r.valDiv.innerText = r.def.format(Math.round(instFreq));
+    }
+
+    drawScope();
+    requestAnimationFrame(animate);
+}
+
+// --- PLAY / HOLD ---
+document.getElementById('btnPlay').addEventListener('click', () => {
+    if(!audioInit) initAudio();
+    if(ctx.state === 'suspended') ctx.resume().then(togglePlay);
+    else togglePlay();
+});
+
+function togglePlay() {
+    state.playing = !state.playing;
+    const btn = document.getElementById('btnPlay');
+    if(state.playing) {
+        btn.classList.add('active');
+        btn.innerHTML = '<span class="icon me-2">■</span> <span id="playLabel">Stop</span>';
+    } else {
+        btn.classList.remove('active');
+        btn.innerHTML = '<span class="icon me-2">▶</span> <span id="playLabel">Play</span>';
+    }
+    updateAudioParams();
+}
+
+document.getElementById('btnHold').addEventListener('click', () => {
+    // Hold works even before audio init — will be applied when audio starts
+    state.hold = !state.hold;
+    const btn = document.getElementById('btnHold');
+    btn.classList.toggle('active', state.hold);
+    if(audioInit) updateAudioParams();
+});
+
+// --- KEYBOARD SHORTCUTS ---
+document.addEventListener('keydown', (e) => {
+    // Ignore if typing in an input
+    if(e.target.tagName === 'INPUT' && e.target.type === 'text') return;
+    if(e.code === 'Space') {
+        e.preventDefault();
+        document.getElementById('btnPlay').click();
+    } else if(e.key === 'h' || e.key === 'H') {
+        document.getElementById('btnHold').click();
+    }
+});
+
+// --- AUDIO OUTPUT DEVICE ---
+function setupDevices() {
+    const sel = document.getElementById('deviceSelect');
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    if(isIOS) {
+        sel.style.display = 'none';
+        document.getElementById('iosDeviceMsg').style.display = 'block';
+    } else {
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(() => {
+            navigator.mediaDevices.enumerateDevices().then(devices => {
+                sel.innerHTML = '<option value="">Sélection par défaut</option>';
+                devices.filter(d => d.kind === 'audiooutput').forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d.deviceId;
+                    opt.text = d.label || `Speaker ${sel.length + 1}`;
+                    sel.appendChild(opt);
+                });
+            });
+        }).catch(() => {});
+
+        sel.addEventListener('change', e => {
+            if(ctx && typeof ctx.setSinkId === 'function') {
+                ctx.setSinkId(e.target.value).catch(console.error);
+            }
+        });
+    }
+}
+
+// --- INIT ---
+window.addEventListener('load', () => {
+    loadState();
+    document.getElementById('invertToggle').checked = !!state.invertSweep;
+    document.getElementById('doubleToggle').checked = !!state.doubleSweep;
+
+    renderKnobs();
+    renderSliders();
+    bindSweep();
+    updateSweepUI();
+    renderPresets();
+
+    // Defer canvas init until after layout is fully rendered
+    requestAnimationFrame(() => {
+        initCanvas();
+        setupDevices();
+        requestAnimationFrame(animate);
+    });
+});
+</script>
+</body>
+</html>
