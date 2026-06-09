@@ -83,6 +83,25 @@
         }
         .slider-wrap.disabled-slider { opacity: 0.38; pointer-events: none; }
         .slider-wrap.knob-sweep-active { opacity: 0.5; pointer-events: none; }
+        .knob-btn-row {
+            display: flex;
+            gap: 6px;
+        }
+        .knob-btn {
+            flex: 1;
+            height: 28px;
+            background: #e8e8e8;
+            border: 1.5px solid #aaa;
+            border-radius: 6px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            touch-action: none;
+            color: #333;
+        }
+        .knob-btn:active { background: #ccc; }
         .slider-header {
             display: flex;
             justify-content: space-between;
@@ -728,7 +747,26 @@ function renderKnobs() {
             saveState(); updateHSDisplays();
         });
 
-        wrap.appendChild(hdr); wrap.appendChild(input);
+        const btnRow = document.createElement('div');
+        btnRow.className = 'knob-btn-row';
+        const btnM = document.createElement('div'); btnM.className = 'knob-btn'; btnM.textContent = '−';
+        const btnP = document.createElement('div'); btnP.className = 'knob-btn'; btnP.textContent = '+';
+
+        const updateKnob = (nv) => {
+            if (k.id === 'freq' && state.sweepActive) return;
+            nv = Math.round(Math.max(k.min, Math.min(k.max, nv)) / k.step) * k.step;
+            state[k.id] = nv;
+            input.value = nv;
+            setTrack(nv); valEl.textContent = k.fmt(nv);
+            if (k.id === 'ratio') updateModBuffer();
+            if (audioInit) updateAudioParams();
+            saveState(); updateHSDisplays();
+        };
+        holdRepeat(btnM, () => updateKnob(state[k.id] - k.step));
+        holdRepeat(btnP, () => updateKnob(state[k.id] + k.step));
+
+        btnRow.appendChild(btnM); btnRow.appendChild(btnP);
+        wrap.appendChild(hdr); wrap.appendChild(input); wrap.appendChild(btnRow);
         grid.appendChild(wrap);
         knobRefs[k.id] = { input, valEl, def: k, setTrack };
     });
