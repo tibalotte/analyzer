@@ -90,31 +90,47 @@
         }
         .slider-label { font-size: 0.78rem; font-weight: bold; color: #444; }
         .slider-val   { font-size: 0.72rem; font-family: monospace; color: #555; }
+        /* iOS Safari requires height >= thumb size; track styled via pseudo-element + CSS var */
         .knob-slider {
             -webkit-appearance: none;
             appearance: none;
             width: 100%;
-            height: 6px;
-            border-radius: 3px;
+            height: 24px;
+            background: transparent;
             outline: none;
             cursor: pointer;
+            padding: 0;
+            margin: 0;
+            vertical-align: middle;
+        }
+        .knob-slider::-webkit-slider-runnable-track {
+            height: 6px;
+            border-radius: 3px;
+            background: linear-gradient(to right,
+                var(--thumb-color, #1a7a8a) var(--fill-pct, 0%),
+                #e0e0e0 var(--fill-pct, 0%));
         }
         .knob-slider::-webkit-slider-thumb {
             -webkit-appearance: none;
-            width: 20px; height: 20px;
+            width: 22px; height: 22px;
+            margin-top: -8px;
             border-radius: 50%;
             background: var(--thumb-color, #1a7a8a);
             border: 2px solid #fff;
             box-shadow: 0 1px 4px rgba(0,0,0,0.35);
             cursor: pointer;
         }
-        .knob-slider::-moz-range-thumb {
-            width: 20px; height: 20px;
-            border-radius: 50%;
+        .knob-slider::-moz-range-track {
+            height: 6px; border-radius: 3px; background: #e0e0e0;
+        }
+        .knob-slider::-moz-range-progress {
+            height: 6px; border-radius: 3px;
             background: var(--thumb-color, #1a7a8a);
-            border: 2px solid #fff;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.35);
-            cursor: pointer;
+        }
+        .knob-slider::-moz-range-thumb {
+            width: 22px; height: 22px; border-radius: 50%;
+            background: var(--thumb-color, #1a7a8a);
+            border: 2px solid #fff; cursor: pointer;
         }
 
         /* Sweep Section */
@@ -235,27 +251,37 @@
             -webkit-appearance: none;
             appearance: none;
             flex-grow: 1;
-            height: 6px;
-            border-radius: 3px;
-            background: #ddd;
+            height: 24px;
+            background: transparent;
             outline: none;
             cursor: pointer;
+            padding: 0; margin: 0;
+        }
+        .hs-range::-webkit-slider-runnable-track {
+            height: 6px; border-radius: 3px;
+            background: linear-gradient(to right,
+                #1a7a8a var(--hs-fill, 50%),
+                #ddd var(--hs-fill, 50%));
         }
         .hs-range::-webkit-slider-thumb {
             -webkit-appearance: none;
-            width: 20px; height: 20px;
+            width: 22px; height: 22px;
+            margin-top: -8px;
             border-radius: 50%;
             background: #1a7a8a;
             border: 2px solid #fff;
             box-shadow: 0 1px 4px rgba(0,0,0,0.3);
             cursor: pointer;
         }
+        .hs-range::-moz-range-track {
+            height: 6px; border-radius: 3px; background: #ddd;
+        }
+        .hs-range::-moz-range-progress {
+            height: 6px; border-radius: 3px; background: #1a7a8a;
+        }
         .hs-range::-moz-range-thumb {
-            width: 20px; height: 20px;
-            border-radius: 50%;
-            background: #1a7a8a;
-            border: 2px solid #fff;
-            cursor: pointer;
+            width: 22px; height: 22px; border-radius: 50%;
+            background: #1a7a8a; border: 2px solid #fff; cursor: pointer;
         }
 
         /* Visualizers */
@@ -686,7 +712,8 @@ function renderKnobs() {
 
         const setTrack = (v) => {
             const pct = Math.max(0, Math.min(100, ((v - k.min) / (k.max - k.min)) * 100));
-            input.style.background = `linear-gradient(to right, ${k.color} ${pct}%, #e0e0e0 ${pct}%)`;
+            // Set CSS variable — works on iOS Safari where inline background on the input itself doesn't affect the track
+            input.style.setProperty('--fill-pct', pct + '%');
         };
         setTrack(cur);
         valEl.textContent = k.fmt(cur);
@@ -771,6 +798,12 @@ function renderSliders() {
         range.value = cur;
         valEl.textContent = fmtHS(s.id, cur);
 
+        const setHSTrack = (v) => {
+            const pct = Math.max(0, Math.min(100, ((v - s.min) / (s.max - s.min)) * 100));
+            range.style.setProperty('--hs-fill', pct + '%');
+        };
+        setHSTrack(cur);
+
         cw.appendChild(btnM); cw.appendChild(range); cw.appendChild(btnP);
         row.appendChild(lblRow); row.appendChild(cw);
         wrap.appendChild(row);
@@ -780,6 +813,7 @@ function renderSliders() {
             state[s.id] = nv;
             range.value = nv;
             valEl.textContent = fmtHS(s.id, nv);
+            setHSTrack(nv);
             if (audioInit) updateAudioParams();
             saveState();
         };
@@ -1070,15 +1104,21 @@ window.addEventListener('load', () => {
     bindSweep();
     renderPresets();
 
-    // Canvas needs layout to be settled
-    requestAnimationFrame(() => {
+    document.getElementById('invertToggle').checked = !!state.invertSweep;
+    document.getElementById('doubleToggle').checked = !!state.doubleSweep;
+    setupDevices();
+
+    // Wait until the sweep slider has a real width before positioning handles
+    // (iOS may need a few frames after load to complete layout)
+    function waitForLayout(attempts) {
         initCanvas();
         updateSweepUI();
-        document.getElementById('invertToggle').checked = !!state.invertSweep;
-        document.getElementById('doubleToggle').checked = !!state.doubleSweep;
-        setupDevices();
-        requestAnimationFrame(animate);
-    });
+        if (sWrap.offsetWidth < 10 && attempts > 0) {
+            setTimeout(() => waitForLayout(attempts - 1), 50);
+        }
+    }
+    requestAnimationFrame(() => waitForLayout(10));
+    requestAnimationFrame(animate);
 });
 </script>
 </body>
