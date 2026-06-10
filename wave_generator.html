@@ -700,6 +700,16 @@ const knobsDef = [
 ];
 const knobRefs = {};
 
+function holdRepeat(el, fn) {
+    let timer = null;
+    const go = (e) => { e.preventDefault(); fn(); timer = setTimeout(function tick(){ fn(); timer = setTimeout(tick, 80); }, 400); };
+    const stop = () => { clearTimeout(timer); timer = null; };
+    el.addEventListener('mousedown', go);
+    el.addEventListener('touchstart', go, { passive: false });
+    window.addEventListener('mouseup', stop);
+    window.addEventListener('touchend', stop);
+}
+
 function renderKnobs() {
     const grid = document.getElementById('knobsGrid');
     grid.innerHTML = '';
@@ -802,16 +812,6 @@ function fmtHS(id, v) {
         return cf < 100 ? '(muet)' : `${v} % (${(cf/2).toFixed(0)} Hz)`;
     }
     return v;
-}
-
-function holdRepeat(el, fn) {
-    let timer = null;
-    const go = (e) => { e.preventDefault(); fn(); timer = setTimeout(function tick(){ fn(); timer = setTimeout(tick, 80); }, 400); };
-    const stop = () => { clearTimeout(timer); timer = null; };
-    el.addEventListener('mousedown', go);
-    el.addEventListener('touchstart', go, { passive: false });
-    window.addEventListener('mouseup', stop);
-    window.addEventListener('touchend', stop);
 }
 
 function renderSliders() {
