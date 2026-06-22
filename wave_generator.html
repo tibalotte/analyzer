@@ -1,0 +1,1716 @@
+<!DOCTYPE html>
+<html lang="fr"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0e3a48">
+    <title>Wave Generator</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+
+        :root {
+            /* Marque */
+            --brand:        #0e5366;   /* teal app */
+            --brand-deep:   #0a3a48;   /* teal foncé (header / barres) */
+            --bg:           #07171d;   /* fond global */
+            --surface:      #fbfbfa;   /* cartes claires */
+            --surface-2:    rgba(255,255,255,0.07); /* panneaux translucides */
+            --line:         rgba(255,255,255,0.12);
+            /* Texte — contrastes WCAG AA vérifiés */
+            --on-brand:     #ffffff;        /* blanc sur teal = 5.8:1  AA */
+            --ink:          #16242b;        /* texte sur surface claire */
+            --ink-soft:     #4a5860;        /* valeurs / secondaire ≈ 5:1 */
+            --ink-mute:     #5e6c73;
+            /* Actions */
+            --go:           #1f9d57;   /* play actif */
+            --stop:         #c8372f;   /* stop */
+            --hold:         #b8860b;   /* hold actif */
+            --focus:        #ffd24a;   /* anneau de focus (haut contraste) */
+            --radius:       16px;
+        }
+
+        html, body { height: 100%; }
+        body {
+            background: var(--bg);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            color: var(--on-brand);
+            touch-action: pan-y;
+            -webkit-text-size-adjust: 100%;
+        }
+
+        /* ---- Plein écran, plus de faux cadre de téléphone ---- */
+        .app {
+            min-height: 100%;
+            background: var(--brand);
+            max-width: 520px;        /* limité seulement sur tablette/desktop */
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ---- Header collant ---- */
+        .app-header {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: var(--brand-deep);
+            border-bottom: 1px solid var(--line);
+            padding: calc(env(safe-area-inset-top) + 10px) 16px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .app-header h1 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            margin: 0;
+        }
+
+        /* ---- Zone scrollable ---- */
+        .scroller {
+            flex: 1;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 16px 16px calc(env(safe-area-inset-bottom) + 116px);
+            padding-left: max(16px, env(safe-area-inset-left));
+            padding-right: max(16px, env(safe-area-inset-right));
+        }
+
+        /* ---- Visualiseur (dans le bandeau collant) ---- */
+        .vis-container {
+            display: flex;
+            gap: 8px;
+            height: 84px;
+            margin: 0;
+        }
+        .scope-canvas {
+            flex-grow: 1;
+            background: #0a151a;
+            border-radius: 12px;
+            display: block;
+            border: 1px solid var(--line);
+        }
+        .vu-canvas {
+            width: 30px;
+            flex-shrink: 0;
+            background: #0a151a;
+            border-radius: 12px;
+            display: block;
+            border: 1px solid var(--line);
+        }
+
+        /* ---- Cartes ---- */
+        .card {
+            background: var(--surface);
+            border-radius: var(--radius);
+            padding: 16px 14px;
+            margin-bottom: 14px;
+            color: var(--ink);
+            box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+        }
+        .panel {
+            background: var(--surface-2);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            padding: 16px 14px;
+            margin-bottom: 14px;
+        }
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 700;
+            font-size: 1rem;
+            margin-bottom: 12px;
+        }
+
+        /* ---- Accordéon (replier les sections) ---- */
+        .acc-toggle { cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+        .acc-chevron { display: inline-block; transition: transform 0.2s; font-size: 0.8em; opacity: 0.85; }
+        .acc:not(.collapsed) .acc-chevron { transform: rotate(90deg); }
+        .acc.collapsed .acc-body { display: none; }
+        .acc.collapsed .section-title.acc-toggle,
+        .acc.collapsed .sweep-header.acc-toggle { margin-bottom: 0; }
+
+        /* ---- Sélecteur de forme d'onde ---- */
+        .wave-select {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-bottom: 18px;
+        }
+        .wave-btn {
+            min-height: 56px;            /* cible tactile généreuse */
+            border-radius: 12px;
+            border: 1.5px solid #5d717a; /* contour ≥3:1 sur carte claire (1.4.11) */
+            background: #e8eef0;
+            color: #12343d;
+            font-size: 0.78rem;
+            font-weight: 700;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            cursor: pointer;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            transition: background 0.15s, color 0.15s, border-color 0.15s;
+        }
+        .wave-btn .wave-glyph { width: 28px; height: 17px; }
+        .wave-btn[aria-pressed="true"] {
+            background: var(--brand);
+            color: #fff;
+            border-color: var(--brand-deep);
+        }
+        .wave-btn:active { filter: brightness(0.95); }
+
+        /* ---- Grille de knobs ---- */
+        .sliders-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px 16px;
+        }
+        .slider-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .slider-wrap.disabled-slider { opacity: 0.4; }
+        .slider-wrap.knob-sweep-active { opacity: 0.5; pointer-events: none; }
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 6px;
+        }
+        .slider-label { font-size: 0.9rem; font-weight: 700; color: var(--ink); }
+        .slider-val   { font-size: 0.82rem; font-family: ui-monospace, "SF Mono", Menlo, monospace; color: var(--ink-soft); }
+
+        .knob-btn-row {
+            display: flex;
+            gap: 8px;
+        }
+        .knob-btn, .hs-btn {
+            background: #e8eef0;
+            border: 1.5px solid #5d717a;   /* contour ≥3:1 sur la carte claire (1.4.11) */
+            border-radius: 10px;
+            font-size: 1.5rem;
+            font-weight: 700;
+            line-height: 1;
+            color: #12343d;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            touch-action: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .knob-btn {
+            flex: 1;
+            height: 44px;                  /* cible tactile 44px (2.5.5 AAA) */
+        }
+        .knob-btn:active, .hs-btn:active { background: #c3d0d4; }
+        button:disabled { cursor: default; }
+
+        /* ---- Sliders verticaux (knobs) ---- */
+        .knob-slider, .hs-range {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 34px;                  /* hauteur tactile généreuse */
+            background: transparent;
+            outline: none;
+            cursor: pointer;
+            padding: 0; margin: 0;
+        }
+        .knob-slider::-webkit-slider-runnable-track {
+            height: 10px; border-radius: 5px;
+            background: linear-gradient(to right,
+                var(--thumb-color, #0f6b7a) var(--fill-pct, 0%),
+                #d4dadd var(--fill-pct, 0%));
+        }
+        .knob-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 28px; height: 28px;
+            margin-top: -9px;
+            border-radius: 50%;
+            background: var(--thumb-color, #0f6b7a);
+            border: 3px solid #fff;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.45);
+        }
+        .knob-slider::-moz-range-track { height: 10px; border-radius: 5px; background: #d4dadd; }
+        .knob-slider::-moz-range-progress { height: 10px; border-radius: 5px; background: var(--thumb-color, #0f6b7a); }
+        .knob-slider::-moz-range-thumb {
+            width: 28px; height: 28px; border-radius: 50%;
+            background: var(--thumb-color, #0f6b7a); border: 3px solid #fff;
+        }
+
+        /* ---- Sliders horizontaux ---- */
+        .hs-row { margin-bottom: 16px; }
+        .hs-row:last-child { margin-bottom: 0; }
+        .hs-label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            font-size: 0.9rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--ink);
+        }
+        .hs-val { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: var(--ink-soft); font-size: 0.82rem; font-weight: 600; }
+        .horiz-slider-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .hs-btn {
+            width: 44px; height: 44px;
+            flex-shrink: 0;
+            font-size: 1.6rem;
+        }
+        .hs-range::-webkit-slider-runnable-track {
+            height: 10px; border-radius: 5px;
+            background: linear-gradient(to right,
+                #0f6b7a var(--hs-fill, 50%),
+                #d4dadd var(--hs-fill, 50%));
+        }
+        .hs-range::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 28px; height: 28px;
+            margin-top: -9px;
+            border-radius: 50%;
+            background: #0f6b7a;
+            border: 3px solid #fff;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+        }
+        .hs-range::-moz-range-track { height: 10px; border-radius: 5px; background: #d4dadd; }
+        .hs-range::-moz-range-progress { height: 10px; border-radius: 5px; background: #0f6b7a; }
+        .hs-range::-moz-range-thumb {
+            width: 28px; height: 28px; border-radius: 50%;
+            background: #0f6b7a; border: 3px solid #fff;
+        }
+
+        /* ---- Auto-Pan : lignes désactivées ---- */
+        #autoPanPanel .hs-row.row-disabled { opacity: 0.4; pointer-events: none; }
+
+        /* ---- Contrôle segmenté (sync du pan) — thème carte claire ---- */
+        .seg-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            margin-bottom: 14px;
+        }
+        .seg-btn {
+            min-height: 42px;
+            border-radius: 10px;
+            border: 1.5px solid #5d717a;
+            background: #e8eef0;
+            color: #12343d;
+            font-size: 0.92rem;
+            font-weight: 700;
+            cursor: pointer;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
+        }
+        .seg-btn[aria-pressed="true"] { background: var(--go); border-color: #0d7a3e; color: #fff; }
+        .seg-btn:active { filter: brightness(0.95); }
+        .pan-link-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.92rem;
+            font-weight: 600;
+            color: var(--ink);
+            min-height: 44px;
+            margin-top: 4px;
+        }
+
+        /* ---- Toggles iOS — état lisible par position + couleur AA ---- */
+        .sweep-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+        .toggle-ios {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 56px; height: 32px;
+            background: #43707f;
+            border-radius: 16px;
+            position: relative;
+            outline: none;
+            cursor: pointer;
+            transition: background 0.25s;
+            flex-shrink: 0;
+            border: 1px solid rgba(0,0,0,0.25);
+        }
+        .toggle-ios:checked { background: var(--go); }
+        .toggle-ios::after {
+            content: '';
+            position: absolute;
+            top: 2px; left: 2px;
+            width: 26px; height: 26px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.25s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+        }
+        .toggle-ios:checked::after { transform: translateX(24px); }
+
+        .sweep-label {
+            text-align: center;
+            font-family: ui-monospace, "SF Mono", Menlo, monospace;
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin: 12px 0 4px;
+        }
+        .dual-slider-wrap {
+            position: relative;
+            height: 48px;
+            background: #e8eef0;
+            border-radius: 24px;
+            margin: 10px 0;
+            touch-action: none;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .ds-track {
+            position: absolute;
+            top: 21px; left: 12px; right: 12px;
+            height: 6px; background: #cfd6d9; border-radius: 3px;
+        }
+        .ds-fill {
+            position: absolute;
+            top: 21px; height: 6px;
+            background: #245fa6; cursor: grab; border-radius: 3px;
+        }
+        .ds-handle {
+            position: absolute;
+            top: 9px;
+            width: 30px; height: 30px;
+            background: #fff;
+            border: 3px solid #245fa6;
+            border-radius: 50%;
+            transform: translateX(-50%);
+            cursor: ew-resize;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+            z-index: 2;
+        }
+        .sweep-controls {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 14px;
+        }
+        .sweep-toggle-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            min-height: 44px;
+        }
+
+        /* ---- Presets ---- */
+        .preset-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+        .preset-btn {
+            min-height: 44px;
+            padding: 8px 16px;
+            background: #e8eef0;
+            border: 1.5px solid #5d717a;  /* contour visible 1.4.11 */
+            border-radius: 12px;
+            color: #12343d;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .preset-btn:active { background: #c3d0d4; }
+        .preset-del {
+            opacity: 0.85; font-size: 0.85em;
+            padding: 4px;
+        }
+        .preset-save-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .preset-name-input {
+            flex-grow: 1;
+            min-height: 44px;
+            padding: 8px 14px;
+            border-radius: 12px;
+            border: 1.5px solid rgba(255,255,255,0.5);
+            background: rgba(255,255,255,0.95);
+            color: var(--ink);
+            font-size: 16px;            /* ≥16px : évite le zoom auto iOS */
+            outline: none;
+        }
+        .preset-name-input::placeholder { color: #67757c; }
+        .btn-save-preset {
+            min-height: 44px;
+            padding: 8px 18px;
+            background: var(--go);
+            border: 1.5px solid #0d7a3e;
+            border-radius: 12px;
+            color: #fff;
+            font-size: 0.95rem;
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-save-preset:active { filter: brightness(0.92); }
+
+        /* ---- Sélecteur de sortie ---- */
+        .device-section label.field-label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.95rem; }
+        select {
+            width: 100%;
+            min-height: 44px;
+            padding: 8px 12px;
+            border-radius: 12px;
+            border: 1.5px solid rgba(255,255,255,0.5);
+            font-size: 16px;
+            background: rgba(255,255,255,0.95);
+            color: var(--ink);
+        }
+        .ios-msg { margin-top: 8px; font-size: 0.9rem; color: var(--on-brand); display: none; }
+
+        /* ---- Barre de transport fixe ---- */
+        .transport {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            z-index: 30;
+            display: flex;
+            gap: 10px;
+            padding: 12px 16px calc(env(safe-area-inset-bottom) + 12px);
+            padding-left: max(16px, env(safe-area-inset-left));
+            padding-right: max(16px, env(safe-area-inset-right));
+            background: var(--brand-deep);
+            border-top: 1px solid var(--line);
+            box-shadow: 0 -6px 20px rgba(0,0,0,0.35);
+        }
+        @media (min-width: 520px) {
+            .transport { left: 50%; transform: translateX(-50%); width: 520px; }
+        }
+        .btn-main {
+            flex: 1;
+            min-height: 60px;
+            border-radius: 14px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            cursor: pointer;
+            user-select: none;
+            touch-action: none;
+            -webkit-tap-highlight-color: transparent;
+            border: 2px solid transparent;
+        }
+        .btn-play {
+            background: var(--go);
+            color: #fff;
+            border-color: #0c8a48;
+        }
+        .btn-play.active {
+            background: var(--stop);
+            border-color: #a82a23;
+        }
+        .btn-hold {
+            background: rgba(255,255,255,0.14);
+            color: #fff;
+            border-color: rgba(255,255,255,0.5);
+        }
+        .btn-hold.active {
+            background: var(--hold);
+            border-color: #8c6708;
+            color: #fff;
+        }
+        .btn-main .icon { font-size: 1.1rem; }
+
+        /* ---- Focus visible (2.4.7 / 2.4.13) ---- */
+        button:focus-visible,
+        input:focus-visible,
+        select:focus-visible,
+        .ds-handle:focus-visible,
+        .preset-name-input:focus-visible {
+            outline: 3px solid var(--focus);
+            outline-offset: 2px;
+        }
+        .knob-slider:focus-visible,
+        .hs-range:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; border-radius: 6px; }
+
+        @media (prefers-reduced-motion: reduce) {
+            * { transition: none !important; }
+        }
+    </style>
+</head>
+
+<body>
+<div class="app">
+    <header class="app-header">
+        <h1>Wave Generator</h1>
+        <div class="vis-container" aria-hidden="true">
+            <canvas class="scope-canvas" id="scopeCanvas"></canvas>
+            <canvas class="vu-canvas" id="vuCanvas"></canvas>
+        </div>
+    </header>
+
+    <main class="scroller">
+        <section class="card" aria-label="Réglages principaux">
+            <div class="wave-select" id="waveSelect" role="group" aria-label="Forme d'onde"></div>
+            <div class="sliders-grid" id="knobsGrid"></div>
+        </section>
+
+        <section class="card acc collapsed" data-acc="sweep">
+            <div class="sweep-header acc-toggle">
+                <span class="section-title" style="margin:0"><span class="acc-chevron">▸</span> ⟷ Freq Sweep</span>
+                <input type="checkbox" class="toggle-ios" id="sweepToggle" aria-label="Activer le balayage de fréquence">
+            </div>
+            <div id="sweepBody" class="acc-body">
+                <div class="sweep-label" id="sweepLabel">50 Hz — 1200 Hz</div>
+                <div class="dual-slider-wrap" id="sweepSlider">
+                    <div class="ds-track"></div>
+                    <div class="ds-fill" id="sweepFill"></div>
+                    <div class="ds-handle" id="sweepH1" tabindex="0" role="slider" aria-label="Fréquence basse du balayage"></div>
+                    <div class="ds-handle" id="sweepH2" tabindex="0" role="slider" aria-label="Fréquence haute du balayage"></div>
+                </div>
+                <div class="sweep-controls">
+                    <label class="sweep-toggle-label">
+                        <input type="checkbox" class="toggle-ios" id="invertToggle" aria-label="Inverser le balayage">
+                        <span>⇄ Inverser</span>
+                    </label>
+                    <label class="sweep-toggle-label">
+                        <input type="checkbox" class="toggle-ios" id="doubleToggle" aria-label="Doubler le balayage">
+                        <span>⋀ Double</span>
+                    </label>
+                </div>
+            </div>
+        </section>
+
+        <section class="card acc collapsed" data-acc="detune" aria-label="Réglages stéréo et détune">
+            <div class="section-title acc-toggle"><span class="acc-chevron">▸</span> 🎚 Stéréo &amp; Détune</div>
+            <div id="slidersWrap" class="acc-body"></div>
+        </section>
+
+        <section class="card acc collapsed" id="autoPanPanel" data-acc="pan">
+            <div class="sweep-header acc-toggle">
+                <span class="section-title" style="margin:0"><span class="acc-chevron">▸</span> 🔄 Auto-Pan / Orbit</span>
+                <input type="checkbox" class="toggle-ios" id="panToggle" aria-label="Activer l'auto-pan stéréo">
+            </div>
+            <div id="panBody" class="acc-body">
+                <div class="hs-label-row"><label>Sync rythme</label></div>
+                <div class="seg-row" id="panSyncSeg" role="group" aria-label="Synchronisation du pan sur le rythme">
+                    <button type="button" class="seg-btn" data-sync="free" aria-label="Pan libre">Libre</button>
+                    <button type="button" class="seg-btn" data-sync="half" aria-label="Pan synchronisé demi-vitesse">÷2</button>
+                    <button type="button" class="seg-btn" data-sync="x1" aria-label="Pan synchronisé même vitesse">×1</button>
+                    <button type="button" class="seg-btn" data-sync="x2" aria-label="Pan synchronisé double vitesse">×2</button>
+                </div>
+                <div class="hs-row" id="panRateRow">
+                    <div class="hs-label-row">
+                        <label for="panRate">Vitesse</label>
+                        <span class="hs-val" id="panRateVal"></span>
+                    </div>
+                    <div class="horiz-slider-wrap">
+                        <button type="button" class="hs-btn" id="panRateMinus" aria-label="Diminuer la vitesse">−</button>
+                        <input type="range" class="hs-range" id="panRate" min="0.02" max="4" step="0.02" aria-label="Vitesse de l'auto-pan">
+                        <button type="button" class="hs-btn" id="panRatePlus" aria-label="Augmenter la vitesse">+</button>
+                    </div>
+                </div>
+                <div class="hs-row" id="panPhaseRow">
+                    <div class="hs-label-row">
+                        <label for="panPhase">Phase</label>
+                        <span class="hs-val" id="panPhaseVal"></span>
+                    </div>
+                    <div class="horiz-slider-wrap">
+                        <button type="button" class="hs-btn" id="panPhaseMinus" aria-label="Diminuer la phase">−</button>
+                        <input type="range" class="hs-range" id="panPhase" min="0" max="360" step="5" aria-label="Déphasage du pan">
+                        <button type="button" class="hs-btn" id="panPhasePlus" aria-label="Augmenter la phase">+</button>
+                    </div>
+                </div>
+                <div class="hs-row">
+                    <div class="hs-label-row">
+                        <label for="panDepth">Largeur</label>
+                        <span class="hs-val" id="panDepthVal"></span>
+                    </div>
+                    <div class="horiz-slider-wrap">
+                        <button type="button" class="hs-btn" id="panDepthMinus" aria-label="Diminuer la largeur">−</button>
+                        <input type="range" class="hs-range" id="panDepth" min="0" max="100" step="1" aria-label="Largeur de l'auto-pan">
+                        <button type="button" class="hs-btn" id="panDepthPlus" aria-label="Augmenter la largeur">+</button>
+                    </div>
+                </div>
+                <div class="hs-row" id="panRatioRow">
+                    <div class="hs-label-row">
+                        <label for="panRatio">Ratio</label>
+                        <span class="hs-val" id="panRatioVal"></span>
+                    </div>
+                    <div class="horiz-slider-wrap">
+                        <button type="button" class="hs-btn" id="panRatioMinus" aria-label="Diminuer le ratio">−</button>
+                        <input type="range" class="hs-range" id="panRatio" min="20" max="80" step="1" aria-label="Ratio de l'auto-pan">
+                        <button type="button" class="hs-btn" id="panRatioPlus" aria-label="Augmenter le ratio">+</button>
+                    </div>
+                </div>
+                <label class="pan-link-label">
+                    <input type="checkbox" class="toggle-ios" id="panLinkRatio" aria-label="Lier le ratio du pan au ratio d'amplitude">
+                    <span>🔗 Lier au ratio d'amplitude</span>
+                </label>
+            </div>
+        </section>
+
+        <section class="card acc collapsed" data-acc="presets">
+            <div class="section-title acc-toggle"><span class="acc-chevron">▸</span> 🎛 Préréglages</div>
+            <div class="acc-body">
+                <div class="preset-row" id="builtinPresets"></div>
+                <div class="preset-row" id="userPresets"></div>
+                <div class="preset-save-row">
+                    <input type="text" class="preset-name-input" id="presetNameInput" placeholder="Nom du préréglage…" aria-label="Nom du préréglage">
+                    <button type="button" class="btn-save-preset" id="btnSavePreset">💾 Sauver</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel device-section acc collapsed" id="deviceSection" data-acc="device">
+            <div class="section-title acc-toggle"><span class="acc-chevron">▸</span> 🔊 Sortie audio</div>
+            <div class="acc-body">
+                <select id="deviceSelect" style="margin-top:4px">
+                    <option value="">Sélection par défaut</option>
+                </select>
+            </div>
+        </section>
+        <p class="ios-msg" id="iosDeviceMsg">Le son est dirigé vers le périphérique iOS par défaut.</p>
+    </main>
+</div>
+
+<nav class="transport" aria-label="Lecture">
+    <button type="button" class="btn-main btn-play" id="btnPlay" aria-pressed="false">
+        <span class="icon" aria-hidden="true">▶</span><span>Play</span>
+    </button>
+    <button type="button" class="btn-main btn-hold" id="btnHold" aria-pressed="false">
+        <span class="icon" aria-hidden="true">⏸</span><span>Hold</span>
+    </button>
+</nav>
+
+<script>
+// ============================================================
+//  Wave Generator — moteur audio + UI
+//  Logique audio inchangée. UI rendue avec de vrais <button>
+//  accessibles (libellés ARIA, focus clavier).
+// ============================================================
+
+// --- MATH UTILS ---
+function warpPhase(t, r) {
+    const r2 = r*r, r3 = r2*r;
+    if (t < r) {
+        const a1 = (2*r - 1) / r3;
+        const b1 = -3*(2*r - 1) / (2*r2);
+        return ((a1*t + b1)*t + 1)*t;
+    } else {
+        const u = (t - r) / (1 - r);
+        return (((1 - 2*r)*u + (6*r - 3)/2)*u + (1 - r))*u + 0.5;
+    }
+}
+
+function subOctaveHMax(fMain) {
+    const cutoff = 200;
+    const Sm = 1 / (1 + (fMain/cutoff)**2);
+    const Ss = 1 / (1 + ((fMain/2)/cutoff)**2);
+    const r = Sm / Ss;
+    return r / (1 + r);
+}
+
+// --- STATE ---
+const STORAGE_KEY = 'stimgen_v10_wave_generator';
+const USER_PRESETS_KEY = 'stimgen_v10_user_presets';
+
+const defaultState = {
+    waveform: 'sine',
+    freq: 700, volume: 60, rythm: 0.5, depth: 0, emphasis: 0, ratio: 50,
+    sweepActive: false, sweepLo: 500, sweepHi: 900, invertSweep: false, doubleSweep: false,
+    balance: 0, phase: 0, detuneOffset: 0, detuneDepth: 0, subOctave: 0,
+    panActive: false, panRate: 0.3, panDepth: 70, panRatio: 50,
+    panSync: 'free', panPhase: 0, panLinkRatio: false
+};
+
+let state = Object.assign({}, defaultState);
+
+function loadState() {
+    try {
+        const s = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        Object.assign(state, s);
+    } catch(e) {}
+    state.sweepLo = Math.max(50, Math.min(1190, state.sweepLo || 500));
+    state.sweepHi = Math.max(state.sweepLo + 10, Math.min(1200, state.sweepHi || 900));
+    state.panRate = Math.max(0.02, Math.min(4, state.panRate || 0.3));
+    state.panDepth = Math.max(0, Math.min(100, state.panDepth ?? 70));
+    state.panRatio = Math.max(20, Math.min(80, state.panRatio ?? 50));
+    if (!['free','half','x1','x2'].includes(state.panSync)) state.panSync = 'free';
+    state.panPhase = Math.max(0, Math.min(360, state.panPhase || 0));
+    state.panLinkRatio = !!state.panLinkRatio;
+    Object.keys(defaultState).forEach(k => {
+        if (state[k] === undefined) state[k] = defaultState[k];
+    });
+}
+
+function saveState() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+const BUILTIN_PRESETS = [
+    { name: 'Défaut',    state: { freq:700,  volume:60, rythm:0.5,  depth:0,  ratio:50, balance:0, phase:0, detuneOffset:0,   detuneDepth:0,  subOctave:0,  sweepActive:false, panActive:false } },
+    { name: 'Delta',     state: { freq:200,  volume:60, rythm:2,    depth:80, ratio:50, balance:0, phase:0, detuneOffset:2,   detuneDepth:30, subOctave:0,  sweepActive:false, panActive:false } },
+    { name: 'Theta',     state: { freq:432,  volume:60, rythm:6,    depth:70, ratio:50, balance:0, phase:0, detuneOffset:6,   detuneDepth:20, subOctave:0,  sweepActive:false, panActive:false } },
+    { name: 'Alpha',     state: { freq:528,  volume:60, rythm:10,   depth:60, ratio:50, balance:0, phase:0, detuneOffset:10,  detuneDepth:20, subOctave:0,  sweepActive:false, panActive:false } },
+    { name: 'Sweep ♭',  state: { freq:200,  volume:60, rythm:0.2,  depth:40, ratio:50, balance:0, phase:0, detuneOffset:0,   detuneDepth:0,  subOctave:60, sweepActive:true, sweepLo:80, sweepHi:400, panActive:false } },
+    { name: 'Orbit',     state: { freq:600,  volume:60, rythm:0.6,  depth:60, ratio:50, balance:0, phase:0, detuneOffset:0,   detuneDepth:0,  subOctave:0,  sweepActive:false, panActive:true, panRate:0.4, panDepth:85, panRatio:50, panSync:'x1', panPhase:90, panLinkRatio:false } },
+];
+
+function loadUserPresets() {
+    try { return JSON.parse(localStorage.getItem(USER_PRESETS_KEY) || '[]'); } catch(e) { return []; }
+}
+function saveUserPresets(list) { localStorage.setItem(USER_PRESETS_KEY, JSON.stringify(list)); }
+
+function applyPreset(ps) {
+    Object.assign(state, ps);
+    state.sweepLo = Math.max(50, Math.min(1190, state.sweepLo || 500));
+    state.sweepHi = Math.max(state.sweepLo + 10, Math.min(1200, state.sweepHi || 900));
+    Object.keys(defaultState).forEach(k => { if (state[k] === undefined) state[k] = defaultState[k]; });
+    saveState();
+    syncAllUI();
+    if (audioInit) { updateModBuffer(); updatePanBuffer(); updateAudioParams(); }
+}
+
+// --- AUDIO ---
+let ctx = null, audioInit = false;
+let merger, masterG, analyserL, analyserR, analyserDetune;
+let carrierOsc, carrierMix1, carrierOscDetune, carrierMix2, carrierOscH2, harmonicGain;
+let balL, balR, amGainL, amGainR, depthGainL, depthGainR, amGainDetune;
+let modOsc, delayModL, delayModR, sweepShaper, sweepLFOGain, subSweepGain, detuneConstant;
+let panOsc, panShaperL, panShaperR;
+
+function initAudio() {
+    if (audioInit) return;
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+    merger = ctx.createChannelMerger(2);
+    masterG = ctx.createGain(); masterG.gain.value = 0;
+    merger.connect(masterG); masterG.connect(ctx.destination);
+
+    // Métrage L/R réel : on sépare les deux canaux post-master avec un
+    // ChannelSplitter, au lieu d'analyser le mixage mono. Balance, déphasage
+    // et auto-pan deviennent ainsi distinctement visibles à l'oscilloscope.
+    const scopeSplit = ctx.createChannelSplitter(2);
+    masterG.connect(scopeSplit);
+
+    analyserL = ctx.createAnalyser(); analyserL.fftSize = 2048; scopeSplit.connect(analyserL, 0);
+    analyserR = ctx.createAnalyser(); analyserR.fftSize = 2048; scopeSplit.connect(analyserR, 1);
+    analyserDetune = ctx.createAnalyser(); analyserDetune.fftSize = 2048;
+
+    carrierOsc = ctx.createOscillator(); carrierMix1 = ctx.createGain();
+    carrierOsc.connect(carrierMix1);
+
+    carrierOscDetune = ctx.createOscillator(); carrierMix2 = ctx.createGain();
+    carrierOscDetune.connect(carrierMix2);
+
+    carrierOscH2 = ctx.createOscillator(); harmonicGain = ctx.createGain();
+    carrierOscH2.connect(harmonicGain);
+
+    const mainSum = ctx.createGain();
+    carrierMix1.connect(mainSum); carrierMix2.connect(mainSum); harmonicGain.connect(mainSum);
+
+    amGainL = ctx.createGain(); amGainR = ctx.createGain();
+    balL = ctx.createGain(); balR = ctx.createGain();
+    mainSum.connect(amGainL); amGainL.connect(balL); balL.connect(merger, 0, 0);
+    mainSum.connect(amGainR); amGainR.connect(balR); balR.connect(merger, 0, 1);
+
+    // Auto-pan : la Balance fixe la position centrale du panoramique et le
+    // LFO (buffer warpPhase) fait osciller cette position autour du centre.
+    // La conversion position → gains L/R suit une loi unique (la même que la
+    // Balance statique) appliquée par deux WaveShapers pilotés par le LFO ;
+    // les courbes sont (re)calculées dans updateAudioParams. balL/balR.gain
+    // sont entièrement pilotés par les shapers (valeur intrinsèque nulle).
+    balL.gain.value = 0; balR.gain.value = 0;
+    panShaperL = ctx.createWaveShaper(); panShaperL.curve = panCurve('L', state.balance/100, 0);
+    panShaperR = ctx.createWaveShaper(); panShaperR.curve = panCurve('R', state.balance/100, 0);
+    panShaperL.connect(balL.gain); panShaperR.connect(balR.gain);
+
+    delayModL = ctx.createDelay(5.0); delayModR = ctx.createDelay(5.0);
+    depthGainL = ctx.createGain(); depthGainR = ctx.createGain();
+    delayModL.connect(depthGainL); delayModR.connect(depthGainR);
+    depthGainL.connect(amGainL.gain); depthGainR.connect(amGainR.gain);
+
+    amGainDetune = ctx.createGain(); amGainDetune.gain.value = 0;
+    carrierMix2.connect(amGainDetune); amGainDetune.connect(analyserDetune);
+    depthGainL.connect(amGainDetune.gain);
+
+    sweepShaper = ctx.createWaveShaper();
+    sweepLFOGain = ctx.createGain();
+    subSweepGain = ctx.createGain(); subSweepGain.gain.value = 0.5;
+    sweepShaper.connect(sweepLFOGain);
+    sweepLFOGain.connect(carrierOsc.frequency);
+    sweepLFOGain.connect(carrierOscDetune.frequency);
+    sweepLFOGain.connect(subSweepGain); subSweepGain.connect(carrierOscH2.frequency);
+
+    detuneConstant = ctx.createConstantSource();
+    detuneConstant.connect(carrierOscDetune.frequency);
+
+    carrierOsc.start(); carrierOscDetune.start(); carrierOscH2.start(); detuneConstant.start();
+
+    updateModBuffer();
+    updatePanBuffer();
+    updateAudioParams();
+    audioInit = true;
+}
+
+let currentPhaseIntegrator = 0;
+let panPhaseIntegrator = 0;
+// Multiplicateurs de synchro du pan (null = mode Libre).
+const PAN_MULTS = { free: null, half: 0.5, x1: 1, x2: 2 };
+function updateModBuffer() {
+    if (!ctx) return;
+    const size = ctx.sampleRate;
+    const buf = ctx.createBuffer(1, size, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    const ratio = state.ratio / 100;
+    for (let i = 0; i < size; i++) data[i] = Math.sin(2 * Math.PI * warpPhase(i/size, ratio));
+
+    const newOsc = ctx.createBufferSource();
+    newOsc.buffer = buf; newOsc.loop = true;
+    newOsc.playbackRate.value = state.hold ? 0 : state.rythm;
+    newOsc.connect(sweepShaper); newOsc.connect(delayModL); newOsc.connect(delayModR);
+
+    const now = ctx.currentTime;
+    newOsc.start(now, (currentPhaseIntegrator % 1.0) * buf.duration);
+    if (modOsc) { modOsc.stop(now); try { modOsc.disconnect(); } catch(e) {} }
+    modOsc = newOsc;
+}
+
+// Courbe d'un WaveShaper convertissant la valeur du LFO (∈[-1,1]) en gain
+// d'un canal. La position de pan p = balance + largeur·LFO est bornée à
+// [-1,1], puis convertie par une loi de panoramique à PUISSANCE CONSTANTE
+// (cos/sin) : les deux canaux varient toujours en sens opposé simultanément
+// (L = cos, R = sin), l'énergie totale L²+R² restant constante. Centre =
+// 0.707 par canal ; rails = 1 / 0. largeur = 0 ⇒ courbe plate = Balance statique.
+function panCurve(side, b, depth) {
+    const N = 512;
+    const c = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+        const x = (i/(N-1))*2 - 1;
+        let p = b + depth * x;
+        if (p > 1) p = 1; else if (p < -1) p = -1;
+        const theta = (p + 1) * (Math.PI / 4);   // p∈[-1,1] → θ∈[0, π/2]
+        c[i] = side === 'L' ? Math.cos(theta) : Math.sin(theta);
+    }
+    return c;
+}
+
+function updatePanBuffer() {
+    if (!ctx) return;
+    const size = ctx.sampleRate;
+    const buf = ctx.createBuffer(1, size, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    // En mode lié, l'orbite emprunte le ratio de la modulation d'amplitude.
+    const effRatio = (state.panLinkRatio ? state.ratio : state.panRatio) / 100;
+    for (let i = 0; i < size; i++) data[i] = Math.sin(2 * Math.PI * warpPhase(i/size, effRatio));
+
+    // En sync, la phase du pan est verrouillée sur celle du rythme (× mult)
+    // décalée du déphasage choisi ; le lock audio est assuré par un
+    // playbackRate proportionnel (cf. updateAudioParams).
+    const mult = PAN_MULTS[state.panSync];
+    const synced = mult !== null;
+    if (synced) {
+        panPhaseIntegrator = (((currentPhaseIntegrator * mult + state.panPhase/360) % 1.0) + 1.0) % 1.0;
+    }
+    const rate = synced ? state.rythm * mult : state.panRate;
+
+    const newOsc = ctx.createBufferSource();
+    newOsc.buffer = buf; newOsc.loop = true;
+    newOsc.playbackRate.value = state.hold ? 0 : rate;
+    newOsc.connect(panShaperL); newOsc.connect(panShaperR);
+
+    const now = ctx.currentTime;
+    newOsc.start(now, (panPhaseIntegrator % 1.0) * buf.duration);
+    if (panOsc) { panOsc.stop(now); try { panOsc.disconnect(); } catch(e) {} }
+    panOsc = newOsc;
+}
+
+function updateAudioParams() {
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    masterG.gain.setTargetAtTime(state.playing ? state.volume / 100 : 0, now, 0.05);
+    if (modOsc) modOsc.playbackRate.setTargetAtTime(state.hold ? 0 : state.rythm, now, 0.05);
+
+    // Forme d'onde appliquée à la porteuse principale + détune.
+    // La sous-octave (carrierOscH2) reste sinus pour des basses propres.
+    const wf = state.waveform || 'sine';
+    if (carrierOsc.type !== wf) { carrierOsc.type = wf; carrierOscDetune.type = wf; }
+
+    const cf = state.sweepActive ? (state.sweepLo + state.sweepHi)/2 : state.freq;
+    carrierOsc.frequency.setTargetAtTime(cf, now, 0.05);
+    carrierOscH2.frequency.setTargetAtTime(cf/2, now, 0.05);
+    carrierOscDetune.frequency.setTargetAtTime(cf, now, 0.05);
+    detuneConstant.offset.setTargetAtTime(state.detuneOffset, now, 0.05);
+
+    const hRaw = state.subOctave / 100;
+    const h = cf < 100 ? 0 : hRaw * subOctaveHMax(cf);
+    const d = state.detuneDepth / 100;
+    carrierMix1.gain.setTargetAtTime((1-h)*(1-d/2), now, 0.05);
+    carrierMix2.gain.setTargetAtTime((1-h)*(d/2), now, 0.05);
+    harmonicGain.gain.setTargetAtTime(h, now, 0.05);
+
+    const depth = state.depth / 100;
+    const amBase = 1.0 - depth/2;
+    amGainL.gain.setTargetAtTime(amBase, now, 0.05);
+    amGainR.gain.setTargetAtTime(amBase, now, 0.05);
+    amGainDetune.gain.setTargetAtTime(amBase, now, 0.05);
+    depthGainL.gain.setTargetAtTime(depth/2, now, 0.05);
+    depthGainR.gain.setTargetAtTime(depth/2, now, 0.05);
+
+    // Balance = centre du panoramique ; l'auto-pan (largeur pd) fait osciller
+    // la position autour de ce centre. Les WaveShapers appliquent la loi de
+    // pan à puissance constante (L/R toujours en sens opposé) au LFO ;
+    // pd=0 ⇒ courbe plate = Balance statique.
+    const b = state.balance / 100;
+    const pd = state.panActive ? state.panDepth / 100 : 0;
+    panShaperL.curve = panCurve('L', b, pd);
+    panShaperR.curve = panCurve('R', b, pd);
+    const panMult = PAN_MULTS[state.panSync];
+    const panRate = panMult !== null ? state.rythm * panMult : state.panRate;
+    if (panOsc) panOsc.playbackRate.setTargetAtTime(state.hold ? 0 : panRate, now, 0.05);
+
+    let delaySecs = state.rythm > 0.01 ? (Math.abs(state.phase)/360) / state.rythm : 0;
+    delaySecs = Math.min(delaySecs, 5.0);
+    delayModL.delayTime.setTargetAtTime(state.phase < 0 ? delaySecs : 0, now, 0.05);
+    delayModR.delayTime.setTargetAtTime(state.phase > 0 ? delaySecs : 0, now, 0.05);
+
+    let sr = state.sweepActive ? (state.sweepHi - state.sweepLo)/2 : 0;
+    if (state.invertSweep) sr = -sr;
+    sweepLFOGain.gain.setTargetAtTime(sr, now, 0.05);
+
+    if (state.doubleSweep && state.sweepActive) {
+        const c = new Float32Array(2048);
+        for (let i = 0; i < 2048; i++) c[i] = 2 * Math.abs((i/2047)*2 - 1) - 1;
+        sweepShaper.curve = c;
+    } else {
+        const c = new Float32Array([-1, 1]);
+        sweepShaper.curve = c;
+    }
+}
+
+// --- WAVEFORM SELECTOR ---
+// Glyphes SVG (currentColor → suivent la couleur du bouton, actif ou non).
+const WAVEFORMS = [
+    { id:'sine',     label:'Sinus',    d:'M2,8 Q6.5,1 11,8 T20,8' },
+    { id:'square',   label:'Carré',    d:'M2,13 L2,4 L9,4 L9,13 L16,13 L16,4 L22,4' },
+    { id:'triangle', label:'Triangle', d:'M2,13 L7,4 L12,13 L17,4 L22,13' },
+    { id:'sawtooth', label:'Scie',     d:'M2,13 L9,4 L9,13 L16,4 L16,13 L22,4' }
+];
+
+function renderWaveSelect() {
+    const box = document.getElementById('waveSelect');
+    if (!box) return;
+    box.innerHTML = '';
+    WAVEFORMS.forEach(w => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'wave-btn';
+        b.setAttribute('aria-pressed', state.waveform === w.id ? 'true' : 'false');
+        b.setAttribute('aria-label', "Forme d'onde " + w.label);
+        b.innerHTML =
+            '<svg class="wave-glyph" viewBox="0 0 24 16" fill="none" stroke="currentColor" ' +
+            'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="' + w.d + '"></path></svg>' +
+            '<span>' + w.label + '</span>';
+        b.addEventListener('click', () => {
+            if (state.waveform === w.id) return;
+            state.waveform = w.id;
+            renderWaveSelect();
+            if (audioInit) updateAudioParams();
+            saveState();
+        });
+        box.appendChild(b);
+    });
+}
+
+// --- KNOBS (grid sliders) ---
+const knobsDef = [
+    { id:'freq',     label:'Fréquence', min:50,  max:1200, step:10,   color:'#0f6b7a', fmt: v => v+' Hz' },
+    { id:'volume',   label:'Volume',    min:0,   max:100,  step:1,    color:'#9c5e16', fmt: v => v+' %' },
+    { id:'rythm',    label:'Rythm',     min:0,   max:5,    step:0.05, color:'#245fa6', fmt: v => (+v).toFixed(2)+' Hz' },
+    { id:'depth',    label:'Depth',     min:0,   max:100,  step:1,    color:'#1f7a4d', fmt: v => v+' %' },
+    { id:'emphasis', label:'Emphasis',  min:0,   max:100,  step:1,    color:'#6d3f80', fmt: v => v+' %', disabled:true },
+    { id:'ratio',    label:'Ratio',     min:20,  max:80,   step:1,    color:'#a04335', fmt: v => v+'/'+(100-v) }
+];
+const knobRefs = {};
+
+function holdRepeat(el, fn) {
+    let timer = null;
+    const go = (e) => { e.preventDefault(); fn(); timer = setTimeout(function tick(){ fn(); timer = setTimeout(tick, 80); }, 400); };
+    const stop = () => { clearTimeout(timer); timer = null; };
+    el.addEventListener('mousedown', go);
+    el.addEventListener('touchstart', go, { passive: false });
+    window.addEventListener('mouseup', stop);
+    window.addEventListener('touchend', stop);
+    // Accessibilité clavier : Entrée / Espace déclenchent un pas
+    el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ' || e.code === 'Space') { e.preventDefault(); fn(); }
+    });
+}
+
+function renderKnobs() {
+    const grid = document.getElementById('knobsGrid');
+    grid.innerHTML = '';
+    knobsDef.forEach(k => {
+        const wrap = document.createElement('div');
+        wrap.className = 'slider-wrap' + (k.disabled ? ' disabled-slider' : '');
+        wrap.id = 'wrap_' + k.id;
+
+        const hdr = document.createElement('div');
+        hdr.className = 'slider-header';
+
+        const lbl = document.createElement('label');
+        lbl.className = 'slider-label';
+        lbl.textContent = k.label;
+        lbl.setAttribute('for', 'knob_' + k.id);
+
+        const valEl = document.createElement('span');
+        valEl.className = 'slider-val';
+        valEl.id = 'val_' + k.id;
+
+        hdr.appendChild(lbl); hdr.appendChild(valEl);
+
+        const input = document.createElement('input');
+        input.type = 'range';
+        input.className = 'knob-slider';
+        input.id = 'knob_' + k.id;
+        input.min = k.min; input.max = k.max; input.step = k.step;
+        input.setAttribute('aria-label', k.label);
+        if (k.disabled) input.disabled = true;
+        const cur = (state[k.id] !== undefined) ? state[k.id] : k.min;
+        input.value = cur;
+        input.style.setProperty('--thumb-color', k.color);
+
+        const setTrack = (v) => {
+            const pct = Math.max(0, Math.min(100, ((v - k.min) / (k.max - k.min)) * 100));
+            input.style.setProperty('--fill-pct', pct + '%');
+        };
+        setTrack(cur);
+        valEl.textContent = k.fmt(cur);
+
+        input.addEventListener('input', () => {
+            if (k.id === 'freq' && state.sweepActive) return;
+            const v = Math.round(parseFloat(input.value) / k.step) * k.step;
+            state[k.id] = v;
+            setTrack(v); valEl.textContent = k.fmt(v);
+            if (k.id === 'ratio') { updateModBuffer(); if (state.panLinkRatio) { updatePanBuffer(); updatePanUI(); } }
+            if (audioInit) updateAudioParams();
+            saveState(); updateHSDisplays();
+        });
+
+        const btnRow = document.createElement('div');
+        btnRow.className = 'knob-btn-row';
+        const btnM = document.createElement('button'); btnM.type = 'button'; btnM.className = 'knob-btn'; btnM.textContent = '−';
+        btnM.setAttribute('aria-label', 'Diminuer ' + k.label);
+        const btnP = document.createElement('button'); btnP.type = 'button'; btnP.className = 'knob-btn'; btnP.textContent = '+';
+        btnP.setAttribute('aria-label', 'Augmenter ' + k.label);
+        if (k.disabled) { btnM.disabled = true; btnP.disabled = true; }
+
+        const updateKnob = (nv) => {
+            if (k.id === 'freq' && state.sweepActive) return;
+            nv = Math.round(Math.max(k.min, Math.min(k.max, nv)) / k.step) * k.step;
+            state[k.id] = nv;
+            input.value = nv;
+            setTrack(nv); valEl.textContent = k.fmt(nv);
+            if (k.id === 'ratio') { updateModBuffer(); if (state.panLinkRatio) { updatePanBuffer(); updatePanUI(); } }
+            if (audioInit) updateAudioParams();
+            saveState(); updateHSDisplays();
+        };
+        holdRepeat(btnM, () => updateKnob(state[k.id] - k.step));
+        holdRepeat(btnP, () => updateKnob(state[k.id] + k.step));
+
+        btnRow.appendChild(btnM); btnRow.appendChild(btnP);
+        wrap.appendChild(hdr); wrap.appendChild(input); wrap.appendChild(btnRow);
+        grid.appendChild(wrap);
+        knobRefs[k.id] = { input, valEl, def: k, setTrack };
+    });
+}
+
+function syncKnob(id, overrideVal) {
+    const r = knobRefs[id];
+    if (!r) return;
+    const v = overrideVal !== undefined ? overrideVal : state[id];
+    r.valEl.textContent = r.def.fmt(v);
+    r.input.value = v;
+    r.setTrack(v);
+}
+
+// --- HORIZONTAL SLIDERS ---
+const hsDef = [
+    { id:'balance',      label:'Balance',            min:-100, max:100,  step:1   },
+    { id:'phase',        label:'Déphasage L/R',      min:-45,  max:45,   step:1   },
+    { id:'detuneOffset', label:'Détune Offset',      min:-2.5, max:2.5,  step:0.1 },
+    { id:'detuneDepth',  label:'Profondeur Détune',  min:0,    max:100,  step:1   },
+    { id:'subOctave',    label:'Sous-octave (Bass)', min:0,    max:100,  step:1   }
+];
+const hsRefs = {};
+
+function fmtHS(id, v) {
+    v = +v;
+    if (id === 'balance')      return v === 0 ? 'Centre' : (v < 0 ? `◀ L ${-v}` : `R ${v} ▶`);
+    if (id === 'phase')        return v === 0 ? 'Synchro' : (v > 0 ? `L mène ${v}°` : `R mène ${-v}°`);
+    if (id === 'detuneOffset') return v === 0 ? 'Synchro' : `${v>0?'+':''}${v.toFixed(1)} Hz`;
+    if (id === 'detuneDepth')  return v + ' %';
+    if (id === 'subOctave') {
+        const cf = state.sweepActive ? (state.sweepLo+state.sweepHi)/2 : state.freq;
+        return cf < 100 ? '(muet)' : `${v} % (${(cf/2).toFixed(0)} Hz)`;
+    }
+    return v;
+}
+
+function renderSliders() {
+    const wrap = document.getElementById('slidersWrap');
+    wrap.innerHTML = '';
+    hsDef.forEach(s => {
+        const row = document.createElement('div');
+        row.className = 'hs-row';
+
+        const lblRow = document.createElement('div');
+        lblRow.className = 'hs-label-row';
+        const lbl = document.createElement('label'); lbl.textContent = s.label; lbl.setAttribute('for', 'hs_' + s.id);
+        const valEl = document.createElement('span'); valEl.className = 'hs-val'; valEl.id = 'hsval_' + s.id;
+        lblRow.appendChild(lbl); lblRow.appendChild(valEl);
+
+        const cw = document.createElement('div'); cw.className = 'horiz-slider-wrap';
+        const btnM = document.createElement('button'); btnM.type = 'button'; btnM.className = 'hs-btn'; btnM.textContent = '−';
+        btnM.setAttribute('aria-label', 'Diminuer ' + s.label);
+        const btnP = document.createElement('button'); btnP.type = 'button'; btnP.className = 'hs-btn'; btnP.textContent = '+';
+        btnP.setAttribute('aria-label', 'Augmenter ' + s.label);
+        const range = document.createElement('input'); range.type = 'range';
+        range.className = 'hs-range';
+        range.id = 'hs_' + s.id;
+        range.setAttribute('aria-label', s.label);
+        range.min = s.min; range.max = s.max; range.step = s.step;
+        const cur = (state[s.id] !== undefined) ? state[s.id] : 0;
+        range.value = cur;
+        valEl.textContent = fmtHS(s.id, cur);
+
+        const setHSTrack = (v) => {
+            const pct = Math.max(0, Math.min(100, ((v - s.min) / (s.max - s.min)) * 100));
+            range.style.setProperty('--hs-fill', pct + '%');
+        };
+        setHSTrack(cur);
+
+        cw.appendChild(btnM); cw.appendChild(range); cw.appendChild(btnP);
+        row.appendChild(lblRow); row.appendChild(cw);
+        wrap.appendChild(row);
+
+        const update = (nv) => {
+            nv = Math.round(Math.max(s.min, Math.min(s.max, nv)) / s.step) * s.step;
+            state[s.id] = nv;
+            range.value = nv;
+            valEl.textContent = fmtHS(s.id, nv);
+            setHSTrack(nv);
+            if (audioInit) updateAudioParams();
+            saveState();
+        };
+        range.addEventListener('input', e => update(parseFloat(e.target.value)));
+        holdRepeat(btnM, () => update(state[s.id] - s.step));
+        holdRepeat(btnP, () => update(state[s.id] + s.step));
+
+        hsRefs[s.id] = { range, valEl };
+    });
+}
+
+function updateHSDisplays() {
+    hsDef.forEach(s => {
+        const el = document.getElementById('hsval_' + s.id);
+        if (el) el.textContent = fmtHS(s.id, state[s.id]);
+    });
+}
+
+function syncAllUI() {
+    renderWaveSelect();
+    renderKnobs();
+    renderSliders();
+    updateSweepUI();
+    updatePanUI();
+    document.getElementById('invertToggle').checked = !!state.invertSweep;
+    document.getElementById('doubleToggle').checked = !!state.doubleSweep;
+}
+
+// --- SWEEP ---
+let sWrap, sFill, sH1, sH2, sBody;
+
+function updateSweepUI() {
+    const minF = 50, maxF = 1200;
+    const w = sWrap.offsetWidth - 24;
+    const p1 = (state.sweepLo - minF) / (maxF - minF);
+    const p2 = (state.sweepHi - minF) / (maxF - minF);
+    sH1.style.left = `calc(12px + ${p1*w}px)`;
+    sH2.style.left = `calc(12px + ${p2*w}px)`;
+    sFill.style.left = `calc(12px + ${p1*w}px)`;
+    sFill.style.width = `${(p2-p1)*w}px`;
+    document.getElementById('sweepLabel').textContent = `${state.sweepLo} Hz — ${state.sweepHi} Hz`;
+    sBody.style.opacity = state.sweepActive ? '1' : '0.5';
+    sBody.style.pointerEvents = state.sweepActive ? 'auto' : 'none';
+    document.getElementById('sweepToggle').checked = state.sweepActive;
+    const fw = document.getElementById('wrap_freq');
+    if (fw) {
+        fw.classList.toggle('knob-sweep-active', state.sweepActive);
+        if (!state.sweepActive) syncKnob('freq');
+    }
+}
+
+function bindSweep() {
+    let drag = null, sx, sLo, sHi;
+    const onStart = (type, e) => {
+        drag = type; sx = e.touches ? e.touches[0].clientX : e.clientX;
+        sLo = state.sweepLo; sHi = state.sweepHi;
+        e.preventDefault();
+    };
+    const onMove = (e) => {
+        if (!drag) return;
+        const x = e.touches ? e.touches[0].clientX : e.clientX;
+        const w = sWrap.offsetWidth - 24;
+        const df = Math.round(((x - sx) / w) * 1150 / 10) * 10;
+        if (drag === 'h1')   state.sweepLo = Math.max(50, Math.min(state.sweepHi-10, sLo+df));
+        else if (drag === 'h2') state.sweepHi = Math.max(state.sweepLo+10, Math.min(1200, sHi+df));
+        else if (drag === 'fill') {
+            const span = sHi - sLo;
+            let lo = sLo+df, hi = sHi+df;
+            if (lo < 50) { lo=50; hi=lo+span; }
+            if (hi > 1200) { hi=1200; lo=hi-span; }
+            state.sweepLo=lo; state.sweepHi=hi;
+        }
+        updateSweepUI(); if (audioInit) updateAudioParams(); updateHSDisplays();
+    };
+    const onEnd = () => { if (drag) { drag=null; saveState(); } };
+
+    ['mousedown','touchstart'].forEach(ev => {
+        const opts = ev === 'touchstart' ? {passive:false} : {};
+        sH1.addEventListener(ev, e => onStart('h1',e), opts);
+        sH2.addEventListener(ev, e => onStart('h2',e), opts);
+        sFill.addEventListener(ev, e => onStart('fill',e), opts);
+    });
+    window.addEventListener('mousemove', onMove, {passive:false});
+    window.addEventListener('touchmove', onMove, {passive:false});
+    window.addEventListener('mouseup', onEnd);
+    window.addEventListener('touchend', onEnd);
+
+    // Accessibilité clavier des poignées de sweep
+    const kbHandle = (which) => (e) => {
+        const stepKeys = { ArrowLeft:-10, ArrowDown:-10, ArrowRight:10, ArrowUp:10 };
+        if (!(e.key in stepKeys)) return;
+        e.preventDefault();
+        const d = stepKeys[e.key];
+        if (which === 'h1') state.sweepLo = Math.max(50, Math.min(state.sweepHi-10, state.sweepLo + d));
+        else state.sweepHi = Math.max(state.sweepLo+10, Math.min(1200, state.sweepHi + d));
+        updateSweepUI(); if (audioInit) updateAudioParams(); updateHSDisplays(); saveState();
+    };
+    sH1.addEventListener('keydown', kbHandle('h1'));
+    sH2.addEventListener('keydown', kbHandle('h2'));
+
+    document.getElementById('sweepToggle').addEventListener('change', e => {
+        state.sweepActive = e.target.checked;
+        updateSweepUI(); if (audioInit) updateAudioParams(); updateHSDisplays(); saveState();
+    });
+    document.getElementById('invertToggle').addEventListener('change', e => {
+        state.invertSweep = e.target.checked; if (audioInit) updateAudioParams(); saveState();
+    });
+    document.getElementById('doubleToggle').addEventListener('change', e => {
+        state.doubleSweep = e.target.checked; if (audioInit) updateAudioParams(); saveState();
+    });
+}
+
+// --- AUTO-PAN ---
+function updatePanUI() {
+    const rate = document.getElementById('panRate');
+    const depth = document.getElementById('panDepth');
+    const ratio = document.getElementById('panRatio');
+    const phase = document.getElementById('panPhase');
+    if (!rate || !depth || !ratio || !phase) return;
+
+    const synced = PAN_MULTS[state.panSync] !== null;
+    const effRatio = state.panLinkRatio ? state.ratio : state.panRatio;
+
+    rate.value = state.panRate;
+    depth.value = state.panDepth;
+    ratio.value = effRatio;
+    phase.value = state.panPhase;
+    rate.style.setProperty('--hs-fill', Math.max(0, Math.min(100, ((state.panRate - 0.02)/(4 - 0.02))*100)) + '%');
+    depth.style.setProperty('--hs-fill', Math.max(0, Math.min(100, state.panDepth)) + '%');
+    ratio.style.setProperty('--hs-fill', Math.max(0, Math.min(100, ((effRatio - 20)/(80 - 20))*100)) + '%');
+    phase.style.setProperty('--hs-fill', Math.max(0, Math.min(100, (state.panPhase/360)*100)) + '%');
+
+    document.getElementById('panRateVal').textContent = synced
+        ? '⟲ ' + state.panSync.replace('half','÷2').replace('x1','×1').replace('x2','×2')
+        : (+state.panRate).toFixed(2) + ' Hz';
+    document.getElementById('panDepthVal').textContent = state.panDepth === 0 ? 'Centre' : state.panDepth + ' %';
+    document.getElementById('panRatioVal').textContent = effRatio + '/' + (100 - effRatio) + (state.panLinkRatio ? ' 🔗' : '');
+    let pv = state.panPhase + '°';
+    if (state.panPhase === 0 || state.panPhase === 360) pv = '0° (aligné)';
+    else if (state.panPhase === 180) pv = '180° (inversé)';
+    document.getElementById('panPhaseVal').textContent = pv;
+
+    // Boutons de sync
+    document.querySelectorAll('#panSyncSeg .seg-btn').forEach(b => {
+        b.setAttribute('aria-pressed', b.dataset.sync === state.panSync ? 'true' : 'false');
+    });
+
+    // Vitesse inactive en sync ; Phase inactive en mode Libre ; Ratio inactif si lié.
+    document.getElementById('panRateRow').classList.toggle('row-disabled', synced);
+    document.getElementById('panPhaseRow').classList.toggle('row-disabled', !synced);
+    document.getElementById('panRatioRow').classList.toggle('row-disabled', state.panLinkRatio);
+    document.getElementById('panLinkRatio').checked = state.panLinkRatio;
+
+    document.getElementById('panToggle').checked = state.panActive;
+    const body = document.getElementById('panBody');
+    body.style.opacity = state.panActive ? '1' : '0.5';
+    body.style.pointerEvents = state.panActive ? 'auto' : 'none';
+}
+
+function bindAutoPan() {
+    const rate = document.getElementById('panRate');
+    const depth = document.getElementById('panDepth');
+    const ratio = document.getElementById('panRatio');
+    const commit = () => { if (audioInit) updateAudioParams(); saveState(); };
+    const setRate = (v) => {
+        v = Math.round(Math.max(0.02, Math.min(4, v)) / 0.02) * 0.02;
+        state.panRate = +v.toFixed(2);
+        updatePanUI(); commit();
+    };
+    const setDepth = (v) => {
+        state.panDepth = Math.round(Math.max(0, Math.min(100, v)));
+        updatePanUI(); commit();
+    };
+    const setRatio = (v) => {
+        state.panRatio = Math.round(Math.max(20, Math.min(80, v)));
+        updatePanUI();
+        if (audioInit) { updatePanBuffer(); updateAudioParams(); }
+        saveState();
+    };
+    const phase = document.getElementById('panPhase');
+    const setPhase = (v) => {
+        state.panPhase = Math.max(0, Math.min(360, Math.round(v / 5) * 5));
+        updatePanUI();
+        if (audioInit) { updatePanBuffer(); updateAudioParams(); }
+        saveState();
+    };
+    const setSync = (mode) => {
+        if (!(mode in PAN_MULTS)) return;
+        state.panSync = mode;
+        updatePanUI();
+        if (audioInit) { updatePanBuffer(); updateAudioParams(); }
+        saveState();
+    };
+    rate.addEventListener('input', e => setRate(parseFloat(e.target.value)));
+    depth.addEventListener('input', e => setDepth(parseFloat(e.target.value)));
+    ratio.addEventListener('input', e => setRatio(parseFloat(e.target.value)));
+    phase.addEventListener('input', e => setPhase(parseFloat(e.target.value)));
+    holdRepeat(document.getElementById('panRateMinus'), () => setRate(state.panRate - 0.02));
+    holdRepeat(document.getElementById('panRatePlus'),  () => setRate(state.panRate + 0.02));
+    holdRepeat(document.getElementById('panDepthMinus'), () => setDepth(state.panDepth - 1));
+    holdRepeat(document.getElementById('panDepthPlus'),  () => setDepth(state.panDepth + 1));
+    holdRepeat(document.getElementById('panRatioMinus'), () => setRatio(state.panRatio - 1));
+    holdRepeat(document.getElementById('panRatioPlus'),  () => setRatio(state.panRatio + 1));
+    holdRepeat(document.getElementById('panPhaseMinus'), () => setPhase(state.panPhase - 5));
+    holdRepeat(document.getElementById('panPhasePlus'),  () => setPhase(state.panPhase + 5));
+    document.querySelectorAll('#panSyncSeg .seg-btn').forEach(b => {
+        b.addEventListener('click', () => setSync(b.dataset.sync));
+    });
+    document.getElementById('panLinkRatio').addEventListener('change', e => {
+        state.panLinkRatio = e.target.checked;
+        updatePanUI();
+        if (audioInit) { updatePanBuffer(); updateAudioParams(); }
+        saveState();
+    });
+    document.getElementById('panToggle').addEventListener('change', e => {
+        state.panActive = e.target.checked;
+        updatePanUI(); if (audioInit) updateAudioParams(); saveState();
+    });
+    updatePanUI();
+}
+
+// --- PRESETS ---
+function renderPresets() {
+    const bi = document.getElementById('builtinPresets');
+    bi.innerHTML = '';
+    BUILTIN_PRESETS.forEach(p => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'preset-btn'; b.textContent = p.name;
+        b.addEventListener('click', () => applyPreset(p.state));
+        bi.appendChild(b);
+    });
+    renderUserPresets();
+}
+
+function renderUserPresets() {
+    const row = document.getElementById('userPresets');
+    row.innerHTML = '';
+    loadUserPresets().forEach((p, i) => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'preset-btn preset-user';
+        b.appendChild(document.createTextNode(p.name + ' '));
+        const x = document.createElement('span');
+        x.className = 'preset-del';
+        x.textContent = '✕';
+        x.dataset.idx = i;
+        x.setAttribute('role', 'button');
+        x.setAttribute('aria-label', 'Supprimer le préréglage ' + p.name);
+        b.appendChild(x);
+        b.addEventListener('click', e => {
+            if (e.target.dataset.idx !== undefined) {
+                const list = loadUserPresets(); list.splice(+e.target.dataset.idx, 1);
+                saveUserPresets(list); renderUserPresets();
+            } else { applyPreset(p.state); }
+        });
+        row.appendChild(b);
+    });
+}
+
+// --- VISUALIZERS ---
+let scopeCanvas, vuCanvas, sCtx, vCtx;
+const bufL = new Float32Array(2048), bufR = new Float32Array(2048), bufD = new Float32Array(2048);
+let dpr = 1;
+
+function initCanvas() {
+    dpr = window.devicePixelRatio || 1;
+    const w1 = scopeCanvas.offsetWidth || 280;
+    const w2 = vuCanvas.offsetWidth || 30;
+    const hh = scopeCanvas.offsetHeight || 96;
+    scopeCanvas.width = w1 * dpr; scopeCanvas.height = hh * dpr;
+    vuCanvas.width = w2 * dpr;   vuCanvas.height = hh * dpr;
+    sCtx.setTransform(1,0,0,1,0,0); vCtx.setTransform(1,0,0,1,0,0);
+    sCtx.scale(dpr, dpr); vCtx.scale(dpr, dpr);
+}
+
+function drawScope() {
+    const w = scopeCanvas.offsetWidth || 280, h = scopeCanvas.offsetHeight || 96;
+    sCtx.fillStyle = '#0a151a';
+    sCtx.fillRect(0, 0, w, h);
+    sCtx.strokeStyle = 'rgba(255,255,255,0.08)';
+    sCtx.lineWidth = 1;
+    sCtx.beginPath();
+    for (let x = 0; x < w; x += 28) { sCtx.moveTo(x,0); sCtx.lineTo(x,h); }
+    for (let y = 0; y < h; y += 28) { sCtx.moveTo(0,y); sCtx.lineTo(w,y); }
+    sCtx.stroke();
+
+    if (!ctx || !state.playing) return;
+    analyserL.getFloatTimeDomainData(bufL);
+    analyserR.getFloatTimeDomainData(bufR);
+
+    const trace = (buf, color, lw) => {
+        sCtx.beginPath(); sCtx.strokeStyle = color; sCtx.lineWidth = lw;
+        for (let i = 0; i < buf.length; i += 4) {
+            const x = (i/buf.length)*w, y = (0.5 - buf[i]*0.5)*h;
+            i === 0 ? sCtx.moveTo(x,y) : sCtx.lineTo(x,y);
+        }
+        sCtx.stroke();
+    };
+
+    if (state.detuneDepth > 0) {
+        analyserDetune.getFloatTimeDomainData(bufD);
+        const cf2 = state.sweepActive ? (state.sweepLo+state.sweepHi)/2 : state.freq;
+        const h2 = cf2 < 100 ? 0 : (state.subOctave/100) * subOctaveHMax(cf2);
+        const sc = (1-h2)*(state.detuneDepth/100/2)*(state.volume/100);
+        for (let i = 0; i < bufD.length; i++) bufD[i] *= sc;
+        trace(bufD, 'rgba(240,150,60,0.8)', 1.5);
+    }
+    trace(bufL, '#3b86d6', 2.5);
+    trace(bufR, '#ff5c69', 2.5);
+
+    let pkL = 0, pkR = 0;
+    for (let i = 0; i < bufL.length; i++) {
+        if (Math.abs(bufL[i]) > pkL) pkL = Math.abs(bufL[i]);
+        if (Math.abs(bufR[i]) > pkR) pkR = Math.abs(bufR[i]);
+    }
+    const vw = vuCanvas.offsetWidth || 30;
+    vCtx.clearRect(0,0,vw,h);
+    vCtx.fillStyle = '#3b86d6'; vCtx.fillRect(2, h-pkL*h, vw/2-3, pkL*h);
+    vCtx.fillStyle = '#ff5c69'; vCtx.fillRect(vw/2+1, h-pkR*h, vw/2-3, pkR*h);
+}
+
+let lastTime = performance.now();
+function animate() {
+    const now = performance.now();
+    const dt = (now - lastTime) / 1000;
+    lastTime = now;
+
+    if (state.playing && !state.hold) {
+        currentPhaseIntegrator = (currentPhaseIntegrator + dt * state.rythm) % 1.0;
+        const mult = PAN_MULTS[state.panSync];
+        if (mult !== null) {
+            panPhaseIntegrator = (((currentPhaseIntegrator * mult + state.panPhase/360) % 1.0) + 1.0) % 1.0;
+        } else {
+            panPhaseIntegrator = (panPhaseIntegrator + dt * state.panRate) % 1.0;
+        }
+    }
+
+    if (state.sweepActive && state.playing && !state.hold) {
+        let lfo = Math.sin(2*Math.PI*warpPhase(currentPhaseIntegrator, state.ratio/100));
+        if (state.doubleSweep) lfo = 2*Math.abs(lfo)-1;
+        if (state.invertSweep) lfo = -lfo;
+        const instFreq = (state.sweepLo+state.sweepHi)/2 + (state.sweepHi-state.sweepLo)/2*lfo;
+        const r = knobRefs['freq'];
+        if (r) r.valEl.textContent = r.def.fmt(Math.round(instFreq));
+    }
+
+    drawScope();
+    requestAnimationFrame(animate);
+}
+
+// --- PLAY / HOLD ---
+function togglePlay() {
+    state.playing = !state.playing;
+    const btn = document.getElementById('btnPlay');
+    if (state.playing) {
+        btn.classList.add('active');
+        btn.setAttribute('aria-pressed', 'true');
+        btn.innerHTML = '<span class="icon" aria-hidden="true">■</span><span>Stop</span>';
+    } else {
+        btn.classList.remove('active');
+        btn.setAttribute('aria-pressed', 'false');
+        btn.innerHTML = '<span class="icon" aria-hidden="true">▶</span><span>Play</span>';
+    }
+    if (audioInit) updateAudioParams();
+}
+
+// --- DEVICE SELECTOR ---
+function setupDevices() {
+    const sel = document.getElementById('deviceSelect');
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (isIOS) {
+        const ds = document.getElementById('deviceSection');
+        if (ds) ds.style.display = 'none';
+        document.getElementById('iosDeviceMsg').style.display = 'block';
+    } else {
+        navigator.mediaDevices && navigator.mediaDevices.getUserMedia({ audio: true }).then(() => {
+            navigator.mediaDevices.enumerateDevices().then(devices => {
+                devices.filter(d => d.kind === 'audiooutput').forEach((d, i) => {
+                    const o = document.createElement('option');
+                    o.value = d.deviceId; o.text = d.label || `Speaker ${i+1}`;
+                    sel.appendChild(o);
+                });
+            });
+        }).catch(() => {});
+        sel.addEventListener('change', e => {
+            if (ctx && typeof ctx.setSinkId === 'function') ctx.setSinkId(e.target.value).catch(console.error);
+        });
+    }
+}
+
+// --- ACCORDÉON ---
+const ACC_KEY = 'stimgen_v10_accordion';
+function loadAccState() { try { return JSON.parse(localStorage.getItem(ACC_KEY) || '{}'); } catch(e) { return {}; } }
+function saveAccState(s) { localStorage.setItem(ACC_KEY, JSON.stringify(s)); }
+
+function initAccordion() {
+    const stored = loadAccState();
+    document.querySelectorAll('[data-acc]').forEach(sec => {
+        const id = sec.dataset.acc;
+        if (id in stored) sec.classList.toggle('collapsed', !!stored[id]);  // sinon : valeur du HTML
+        const head = sec.querySelector('.acc-toggle');
+        if (!head) return;
+        head.setAttribute('role', 'button');
+        head.setAttribute('tabindex', '0');
+        head.setAttribute('aria-expanded', String(!sec.classList.contains('collapsed')));
+        const fromControl = (t) => t.closest('input, label, select, button, .toggle-ios');
+        const toggle = () => {
+            const collapsed = !sec.classList.contains('collapsed');
+            sec.classList.toggle('collapsed', collapsed);
+            head.setAttribute('aria-expanded', String(!collapsed));
+            const s = loadAccState(); s[id] = collapsed; saveAccState(s);
+            // Le balayage positionne ses poignées d'après la largeur du conteneur,
+            // nulle tant que la section est repliée : on recalcule à l'ouverture.
+            if (!collapsed && id === 'sweep' && typeof updateSweepUI === 'function') updateSweepUI();
+        };
+        head.addEventListener('click', e => { if (!fromControl(e.target)) toggle(); });
+        head.addEventListener('keydown', e => {
+            if ((e.key === 'Enter' || e.key === ' ') && !fromControl(e.target)) { e.preventDefault(); toggle(); }
+        });
+    });
+}
+
+// --- BOOT ---
+window.addEventListener('load', () => {
+    sWrap = document.getElementById('sweepSlider');
+    sFill = document.getElementById('sweepFill');
+    sH1   = document.getElementById('sweepH1');
+    sH2   = document.getElementById('sweepH2');
+    sBody = document.getElementById('sweepBody');
+    scopeCanvas = document.getElementById('scopeCanvas');
+    vuCanvas    = document.getElementById('vuCanvas');
+    sCtx = scopeCanvas.getContext('2d');
+    vCtx = vuCanvas.getContext('2d');
+
+    loadState();
+    renderWaveSelect();
+    renderKnobs();
+    renderSliders();
+    bindSweep();
+    bindAutoPan();
+    renderPresets();
+
+    document.getElementById('btnPlay').addEventListener('click', () => {
+        if (!audioInit) initAudio();
+        if (ctx.state === 'suspended') ctx.resume().then(togglePlay);
+        else togglePlay();
+    });
+    document.getElementById('btnHold').addEventListener('click', () => {
+        state.hold = !state.hold;
+        const hb = document.getElementById('btnHold');
+        hb.classList.toggle('active', state.hold);
+        hb.setAttribute('aria-pressed', state.hold ? 'true' : 'false');
+        if (audioInit) updateAudioParams();
+    });
+    document.addEventListener('keydown', e => {
+        if (e.target.tagName === 'INPUT' && e.target.type === 'text') return;
+        if (e.code === 'Space' && (e.target === document.body)) { e.preventDefault(); document.getElementById('btnPlay').click(); }
+        else if (e.key === 'h' || e.key === 'H') document.getElementById('btnHold').click();
+    });
+
+    document.getElementById('btnSavePreset').addEventListener('click', () => {
+        const name = document.getElementById('presetNameInput').value.trim();
+        if (!name) return;
+        const list = loadUserPresets();
+        const ps = Object.assign({}, state);
+        list.push({ name, state: ps });
+        saveUserPresets(list);
+        document.getElementById('presetNameInput').value = '';
+        renderUserPresets();
+    });
+
+    document.getElementById('invertToggle').checked = !!state.invertSweep;
+    document.getElementById('doubleToggle').checked = !!state.doubleSweep;
+    setupDevices();
+    initAccordion();
+
+    function waitForLayout(attempts) {
+        initCanvas();
+        updateSweepUI();
+        if (sWrap.offsetWidth < 10 && attempts > 0) {
+            setTimeout(() => waitForLayout(attempts - 1), 50);
+        }
+    }
+    requestAnimationFrame(() => waitForLayout(10));
+    requestAnimationFrame(animate);
+    window.addEventListener('resize', () => { initCanvas(); updateSweepUI(); });
+});
+
+</script>
+
+
+</body></html>
