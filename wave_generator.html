@@ -1,494 +1,716 @@
 <!DOCTYPE html>
-<html lang="fr">
-<head>
+<html lang="fr"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0e3a48">
     <title>Wave Generator</title>
     <style>
         *, *::before, *::after { box-sizing: border-box; }
-        :root {
-            --bg-color: #166985;
-            --border-color: #0b2730;
-            --card-bg: #f8f8f8;
-            --text-light: #ffffff;
-            --text-dark: #333333;
-        }
-        html, body {
-            overflow-x: hidden;
-        }
-        body {
-            background-color: #0a151a;
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 8px;
-            color: var(--text-dark);
-            touch-action: pan-y;
-        }
-        .app-container {
-            background: var(--bg-color);
-            border: 3px solid var(--border-color);
-            border-radius: 35px;
-            width: 100%;
-            max-width: 420px;
-            margin: 0 auto;
-            padding: 16px 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            color: var(--text-light);
-            overflow: hidden;
-        }
-        h2 { text-align: center; font-weight: bold; margin-bottom: 20px; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
 
-        /* Play / Hold row */
-        .btn-row {
+        :root {
+            /* Marque */
+            --brand:        #0e5366;   /* teal app */
+            --brand-deep:   #0a3a48;   /* teal foncé (header / barres) */
+            --bg:           #07171d;   /* fond global */
+            --surface:      #fbfbfa;   /* cartes claires */
+            --surface-2:    rgba(255,255,255,0.07); /* panneaux translucides */
+            --line:         rgba(255,255,255,0.12);
+            /* Texte — contrastes WCAG AA vérifiés */
+            --on-brand:     #ffffff;        /* blanc sur teal = 5.8:1  AA */
+            --ink:          #16242b;        /* texte sur surface claire */
+            --ink-soft:     #4a5860;        /* valeurs / secondaire ≈ 5:1 */
+            --ink-mute:     #5e6c73;
+            /* Actions */
+            --go:           #1f9d57;   /* play actif */
+            --stop:         #c8372f;   /* stop */
+            --hold:         #b8860b;   /* hold actif */
+            --focus:        #ffd24a;   /* anneau de focus (haut contraste) */
+            --radius:       16px;
+        }
+
+        html, body { height: 100%; }
+        body {
+            background: var(--bg);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            color: var(--on-brand);
+            touch-action: pan-y;
+            -webkit-text-size-adjust: 100%;
+        }
+
+        /* ---- Plein écran, plus de faux cadre de téléphone ---- */
+        .app {
+            min-height: 100%;
+            background: var(--brand);
+            max-width: 520px;        /* limité seulement sur tablette/desktop */
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ---- Header collant ---- */
+        .app-header {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: var(--brand-deep);
+            border-bottom: 1px solid var(--line);
+            padding: calc(env(safe-area-inset-top) + 10px) 16px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .app-header h1 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            margin: 0;
+        }
+
+        /* ---- Zone scrollable ---- */
+        .scroller {
+            flex: 1;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 16px 16px calc(env(safe-area-inset-bottom) + 116px);
+            padding-left: max(16px, env(safe-area-inset-left));
+            padding-right: max(16px, env(safe-area-inset-right));
+        }
+
+        /* ---- Visualiseur (dans le bandeau collant) ---- */
+        .vis-container {
             display: flex;
             gap: 8px;
-            margin-bottom: 12px;
+            height: 84px;
+            margin: 0;
         }
-        .btn-main {
-            flex: 1;
-            height: 70px;
-            border: 2px solid #000;
+        .scope-canvas {
+            flex-grow: 1;
+            background: #0a151a;
             border-radius: 12px;
-            font-size: 1.2rem;
-            font-weight: bold;
+            display: block;
+            border: 1px solid var(--line);
+        }
+        .vu-canvas {
+            width: 30px;
+            flex-shrink: 0;
+            background: #0a151a;
+            border-radius: 12px;
+            display: block;
+            border: 1px solid var(--line);
+        }
+
+        /* ---- Cartes ---- */
+        .card {
+            background: var(--surface);
+            border-radius: var(--radius);
+            padding: 16px 14px;
+            margin-bottom: 14px;
+            color: var(--ink);
+            box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+        }
+        .panel {
+            background: var(--surface-2);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            padding: 16px 14px;
+            margin-bottom: 14px;
+        }
+        .section-title {
             display: flex;
             align-items: center;
+            gap: 8px;
+            font-weight: 700;
+            font-size: 1rem;
+            margin-bottom: 12px;
+        }
+
+        /* ---- Accordéon (replier les sections) ---- */
+        .acc-toggle { cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+        .acc-chevron { display: inline-block; transition: transform 0.2s; font-size: 0.8em; opacity: 0.85; }
+        .acc:not(.collapsed) .acc-chevron { transform: rotate(90deg); }
+        .acc.collapsed .acc-body { display: none; }
+        .acc.collapsed .section-title.acc-toggle,
+        .acc.collapsed .sweep-header.acc-toggle { margin-bottom: 0; }
+
+        /* ---- Sélecteur de forme d'onde ---- */
+        .wave-select {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-bottom: 18px;
+        }
+        .wave-btn {
+            min-height: 56px;            /* cible tactile généreuse */
+            border-radius: 12px;
+            border: 1.5px solid #5d717a; /* contour ≥3:1 sur carte claire (1.4.11) */
+            background: #e8eef0;
+            color: #12343d;
+            font-size: 0.78rem;
+            font-weight: 700;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
             justify-content: center;
-            background: var(--card-bg);
-            color: var(--text-dark);
-            transition: background 0.2s;
+            gap: 4px;
             cursor: pointer;
             user-select: none;
-            touch-action: none;
-            gap: 6px;
+            -webkit-tap-highlight-color: transparent;
+            transition: background 0.15s, color 0.15s, border-color 0.15s;
         }
-        .btn-play.active { background: #d4edda; }
-        .btn-play.active .icon { color: #dc3545; }
-        .btn-hold.active { background: #fff3cd; }
-
-        .card-custom {
-            background: var(--card-bg);
-            border: 2px solid #000;
-            border-radius: 12px;
-            padding: 12px;
-            margin-bottom: 15px;
-            color: var(--text-dark);
+        .wave-btn .wave-glyph { width: 28px; height: 17px; }
+        .wave-btn[aria-pressed="true"] {
+            background: var(--brand);
+            color: #fff;
+            border-color: var(--brand-deep);
         }
+        .wave-btn:active { filter: brightness(0.95); }
 
-        /* Sliders grid */
+        /* ---- Grille de knobs ---- */
         .sliders-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 10px 14px;
+            gap: 18px 16px;
         }
         .slider-wrap {
             display: flex;
             flex-direction: column;
-            gap: 4px;
-            min-width: 0;   /* allow grid item to shrink */
-            overflow: hidden;
+            gap: 8px;
         }
-        .slider-wrap.disabled-slider { opacity: 0.38; pointer-events: none; }
+        .slider-wrap.disabled-slider { opacity: 0.4; }
         .slider-wrap.knob-sweep-active { opacity: 0.5; pointer-events: none; }
-        .knob-btn-row {
-            display: flex;
-            gap: 6px;
-        }
-        .knob-btn {
-            flex: 1;
-            height: 28px;
-            background: #e8e8e8;
-            border: 1.5px solid #aaa;
-            border-radius: 6px;
-            font-size: 1.1rem;
-            font-weight: bold;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer;
-            user-select: none;
-            touch-action: none;
-            color: #333;
-        }
-        .knob-btn:active { background: #ccc; }
         .slider-header {
             display: flex;
             justify-content: space-between;
             align-items: baseline;
-            gap: 4px;
-            min-width: 0;
+            gap: 6px;
         }
-        .slider-label { font-size: 0.75rem; font-weight: bold; color: #444; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .slider-val   { font-size: 0.70rem; font-family: monospace; color: #555; white-space: nowrap; flex-shrink: 0; }
-        /* iOS Safari requires height >= thumb size; track styled via pseudo-element + CSS var */
-        .knob-slider {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 100%;
-            height: 24px;
-            background: transparent;
-            outline: none;
-            cursor: pointer;
-            padding: 0;
-            margin: 0;
-            vertical-align: middle;
-        }
-        .knob-slider::-webkit-slider-runnable-track {
-            height: 6px;
-            border-radius: 3px;
-            background: linear-gradient(to right,
-                var(--thumb-color, #1a7a8a) var(--fill-pct, 0%),
-                #e0e0e0 var(--fill-pct, 0%));
-        }
-        .knob-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 22px; height: 22px;
-            margin-top: -8px;
-            border-radius: 50%;
-            background: var(--thumb-color, #1a7a8a);
-            border: 2px solid #fff;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.35);
-            cursor: pointer;
-        }
-        .knob-slider::-moz-range-track {
-            height: 6px; border-radius: 3px; background: #e0e0e0;
-        }
-        .knob-slider::-moz-range-progress {
-            height: 6px; border-radius: 3px;
-            background: var(--thumb-color, #1a7a8a);
-        }
-        .knob-slider::-moz-range-thumb {
-            width: 22px; height: 22px; border-radius: 50%;
-            background: var(--thumb-color, #1a7a8a);
-            border: 2px solid #fff; cursor: pointer;
-        }
+        .slider-label { font-size: 0.9rem; font-weight: 700; color: var(--ink); }
+        .slider-val   { font-size: 0.82rem; font-family: ui-monospace, "SF Mono", Menlo, monospace; color: var(--ink-soft); }
 
-        /* Sweep Section */
-        .sweep-section {
-            background: rgba(0,0,0,0.2);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 15px;
-        }
-        .sweep-header {
+        .knob-btn-row {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-            font-weight: bold;
-        }
-        .toggle-ios {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 50px; height: 28px;
-            background: #55808f;
-            border-radius: 14px;
-            position: relative;
-            outline: none;
-            cursor: pointer;
-            transition: background 0.3s;
-            flex-shrink: 0;
-        }
-        .toggle-ios:checked { background: #2dce6e; }
-        .toggle-ios::after {
-            content: '';
-            position: absolute;
-            top: 2px; left: 2px;
-            width: 24px; height: 24px;
-            background: white;
-            border-radius: 50%;
-            transition: transform 0.3s;
-        }
-        .toggle-ios:checked::after { transform: translateX(22px); }
-
-        .dual-slider-wrap {
-            position: relative;
-            height: 40px;
-            background: #fff;
-            border: 2px solid #000;
-            border-radius: 20px;
-            margin: 12px 0;
-            touch-action: none;
-        }
-        .ds-track {
-            position: absolute;
-            top: 17px; left: 12px; right: 12px;
-            height: 4px;
-            background: #ddd;
-            border-radius: 2px;
-        }
-        .ds-fill {
-            position: absolute;
-            top: 17px; height: 4px;
-            background: #2a6aaa;
-            cursor: grab;
-            border-radius: 2px;
-        }
-        .ds-handle {
-            position: absolute;
-            top: 7px;
-            width: 24px; height: 24px;
-            background: #fff;
-            border: 2px solid #000;
-            border-radius: 50%;
-            transform: translateX(-50%);
-            cursor: ew-resize;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-            z-index: 2;
-        }
-        .sweep-controls {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.85rem;
-        }
-        .sweep-toggle-label {
-            display: flex;
-            align-items: center;
             gap: 8px;
         }
-
-        /* Horizontal sliders */
-        .hs-label-row {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.85rem;
-            font-weight: bold;
-            margin-bottom: 2px;
-            margin-top: 10px;
-        }
-        .hs-val { font-family: monospace; color: #555; font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; text-align: right; }
-        .horiz-slider-wrap {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            min-width: 0;
-        }
-        .hs-btn {
-            width: 36px; height: 36px;
-            flex-shrink: 0;
-            background: #eee;
-            border: 2px solid #000;
-            border-radius: 6px;
-            font-weight: bold;
-            font-size: 1.1rem;
+        .knob-btn, .hs-btn {
+            background: #e8eef0;
+            border: 1.5px solid #5d717a;   /* contour ≥3:1 sur la carte claire (1.4.11) */
+            border-radius: 10px;
+            font-size: 1.5rem;
+            font-weight: 700;
+            line-height: 1;
+            color: #12343d;
             display: flex; align-items: center; justify-content: center;
             cursor: pointer;
             user-select: none;
             touch-action: none;
+            -webkit-tap-highlight-color: transparent;
         }
-        .hs-btn:active { background: #ccc; }
-        .hs-range {
+        .knob-btn {
+            flex: 1;
+            height: 44px;                  /* cible tactile 44px (2.5.5 AAA) */
+        }
+        .knob-btn:active, .hs-btn:active { background: #c3d0d4; }
+        button:disabled { cursor: default; }
+
+        /* ---- Sliders verticaux (knobs) ---- */
+        .knob-slider, .hs-range {
             -webkit-appearance: none;
             appearance: none;
-            flex-grow: 1;
-            height: 24px;
+            width: 100%;
+            height: 34px;                  /* hauteur tactile généreuse */
             background: transparent;
             outline: none;
             cursor: pointer;
             padding: 0; margin: 0;
         }
-        .hs-range::-webkit-slider-runnable-track {
-            height: 6px; border-radius: 3px;
+        .knob-slider::-webkit-slider-runnable-track {
+            height: 10px; border-radius: 5px;
             background: linear-gradient(to right,
-                #1a7a8a var(--hs-fill, 50%),
-                #ddd var(--hs-fill, 50%));
+                var(--thumb-color, #0f6b7a) var(--fill-pct, 0%),
+                #d4dadd var(--fill-pct, 0%));
+        }
+        .knob-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 28px; height: 28px;
+            margin-top: -9px;
+            border-radius: 50%;
+            background: var(--thumb-color, #0f6b7a);
+            border: 3px solid #fff;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.45);
+        }
+        .knob-slider::-moz-range-track { height: 10px; border-radius: 5px; background: #d4dadd; }
+        .knob-slider::-moz-range-progress { height: 10px; border-radius: 5px; background: var(--thumb-color, #0f6b7a); }
+        .knob-slider::-moz-range-thumb {
+            width: 28px; height: 28px; border-radius: 50%;
+            background: var(--thumb-color, #0f6b7a); border: 3px solid #fff;
+        }
+
+        /* ---- Sliders horizontaux ---- */
+        .hs-row { margin-bottom: 16px; }
+        .hs-row:last-child { margin-bottom: 0; }
+        .hs-label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            font-size: 0.9rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--ink);
+        }
+        .hs-val { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: var(--ink-soft); font-size: 0.82rem; font-weight: 600; }
+        .horiz-slider-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .hs-btn {
+            width: 44px; height: 44px;
+            flex-shrink: 0;
+            font-size: 1.6rem;
+        }
+        .hs-range::-webkit-slider-runnable-track {
+            height: 10px; border-radius: 5px;
+            background: linear-gradient(to right,
+                #0f6b7a var(--hs-fill, 50%),
+                #d4dadd var(--hs-fill, 50%));
         }
         .hs-range::-webkit-slider-thumb {
             -webkit-appearance: none;
-            width: 22px; height: 22px;
-            margin-top: -8px;
+            width: 28px; height: 28px;
+            margin-top: -9px;
             border-radius: 50%;
-            background: #1a7a8a;
-            border: 2px solid #fff;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-            cursor: pointer;
+            background: #0f6b7a;
+            border: 3px solid #fff;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
         }
-        .hs-range::-moz-range-track {
-            height: 6px; border-radius: 3px; background: #ddd;
-        }
-        .hs-range::-moz-range-progress {
-            height: 6px; border-radius: 3px; background: #1a7a8a;
-        }
+        .hs-range::-moz-range-track { height: 10px; border-radius: 5px; background: #d4dadd; }
+        .hs-range::-moz-range-progress { height: 10px; border-radius: 5px; background: #0f6b7a; }
         .hs-range::-moz-range-thumb {
-            width: 22px; height: 22px; border-radius: 50%;
-            background: #1a7a8a; border: 2px solid #fff; cursor: pointer;
+            width: 28px; height: 28px; border-radius: 50%;
+            background: #0f6b7a; border: 3px solid #fff;
         }
 
-        /* Visualizers */
-        .vis-container {
-            display: flex;
-            gap: 8px;
-            height: 80px;
-            margin-bottom: 15px;
-        }
-        .scope-canvas {
-            flex-grow: 1;
-            background: #000;
-            border: 2px solid #000;
-            border-radius: 8px;
-            display: block;
-        }
-        .vu-canvas {
-            width: 30px;
-            flex-shrink: 0;
-            background: #ddd;
-            border: 2px solid #000;
-            border-radius: 8px;
-            display: block;
-        }
+        /* ---- Auto-Pan : lignes désactivées ---- */
+        #autoPanPanel .hs-row.row-disabled { opacity: 0.4; pointer-events: none; }
 
-        /* Presets */
-        .presets-section {
-            background: rgba(0,0,0,0.2);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-            padding: 12px;
-            margin-bottom: 15px;
-        }
-        .presets-title { font-weight: bold; color: var(--text-light); margin-bottom: 8px; }
-        .preset-row {
-            display: flex;
+        /* ---- Contrôle segmenté (sync du pan) — thème carte claire ---- */
+        .seg-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
             gap: 6px;
-            flex-wrap: wrap;
-            margin-bottom: 6px;
+            margin-bottom: 14px;
         }
-        .preset-btn {
-            padding: 5px 10px;
-            background: rgba(255,255,255,0.15);
-            border: 1px solid rgba(255,255,255,0.3);
-            border-radius: 8px;
-            color: #fff;
-            font-size: 0.8rem;
+        .seg-btn {
+            min-height: 42px;
+            border-radius: 10px;
+            border: 1.5px solid #5d717a;
+            background: #e8eef0;
+            color: #12343d;
+            font-size: 0.92rem;
+            font-weight: 700;
             cursor: pointer;
             user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
         }
-        .preset-btn:active { background: rgba(255,255,255,0.3); }
+        .seg-btn[aria-pressed="true"] { background: var(--go); border-color: #0d7a3e; color: #fff; }
+        .seg-btn:active { filter: brightness(0.95); }
+        .pan-link-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.92rem;
+            font-weight: 600;
+            color: var(--ink);
+            min-height: 44px;
+            margin-top: 4px;
+        }
+
+        /* ---- Toggles iOS — état lisible par position + couleur AA ---- */
+        .sweep-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+        .toggle-ios {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 56px; height: 32px;
+            background: #43707f;
+            border-radius: 16px;
+            position: relative;
+            outline: none;
+            cursor: pointer;
+            transition: background 0.25s;
+            flex-shrink: 0;
+            border: 1px solid rgba(0,0,0,0.25);
+        }
+        .toggle-ios:checked { background: var(--go); }
+        .toggle-ios::after {
+            content: '';
+            position: absolute;
+            top: 2px; left: 2px;
+            width: 26px; height: 26px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.25s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+        }
+        .toggle-ios:checked::after { transform: translateX(24px); }
+
+        .sweep-label {
+            text-align: center;
+            font-family: ui-monospace, "SF Mono", Menlo, monospace;
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin: 12px 0 4px;
+        }
+        .dual-slider-wrap {
+            position: relative;
+            height: 48px;
+            background: #e8eef0;
+            border-radius: 24px;
+            margin: 10px 0;
+            touch-action: none;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .ds-track {
+            position: absolute;
+            top: 21px; left: 12px; right: 12px;
+            height: 6px; background: #cfd6d9; border-radius: 3px;
+        }
+        .ds-fill {
+            position: absolute;
+            top: 21px; height: 6px;
+            background: #245fa6; cursor: grab; border-radius: 3px;
+        }
+        .ds-handle {
+            position: absolute;
+            top: 9px;
+            width: 30px; height: 30px;
+            background: #fff;
+            border: 3px solid #245fa6;
+            border-radius: 50%;
+            transform: translateX(-50%);
+            cursor: ew-resize;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+            z-index: 2;
+        }
+        .sweep-controls {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 14px;
+        }
+        .sweep-toggle-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            min-height: 44px;
+        }
+
+        /* ---- Presets ---- */
+        .preset-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+        .preset-btn {
+            min-height: 44px;
+            padding: 8px 16px;
+            background: #e8eef0;
+            border: 1.5px solid #5d717a;  /* contour visible 1.4.11 */
+            border-radius: 12px;
+            color: #12343d;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .preset-btn:active { background: #c3d0d4; }
+        .preset-del {
+            opacity: 0.85; font-size: 0.85em;
+            padding: 4px;
+        }
         .preset-save-row {
             display: flex;
-            gap: 6px;
-            margin-top: 8px;
+            gap: 10px;
+            margin-top: 10px;
         }
         .preset-name-input {
             flex-grow: 1;
-            padding: 5px 8px;
-            border-radius: 6px;
-            border: 1px solid #ccc;
-            font-size: 0.82rem;
+            min-height: 44px;
+            padding: 8px 14px;
+            border-radius: 12px;
+            border: 1.5px solid rgba(255,255,255,0.5);
+            background: rgba(255,255,255,0.95);
+            color: var(--ink);
+            font-size: 16px;            /* ≥16px : évite le zoom auto iOS */
             outline: none;
         }
+        .preset-name-input::placeholder { color: #67757c; }
         .btn-save-preset {
-            padding: 5px 12px;
-            background: rgba(45,206,110,0.3);
-            border: 1px solid #2dce6e;
-            border-radius: 8px;
+            min-height: 44px;
+            padding: 8px 18px;
+            background: var(--go);
+            border: 1.5px solid #0d7a3e;
+            border-radius: 12px;
             color: #fff;
-            font-size: 0.82rem;
+            font-size: 0.95rem;
+            font-weight: 700;
             cursor: pointer;
             white-space: nowrap;
-            user-select: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
-        .btn-save-preset:active { background: rgba(45,206,110,0.5); }
+        .btn-save-preset:active { filter: brightness(0.92); }
 
-        /* Device selector */
-        .device-section {
-            background: rgba(0,0,0,0.2);
-            border-radius: 8px;
-            padding: 10px;
-            font-size: 0.85rem;
-            margin-top: 15px;
-        }
-        .device-section label { display: block; margin-bottom: 6px; color: var(--text-light); }
+        /* ---- Sélecteur de sortie ---- */
+        .device-section label.field-label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.95rem; }
         select {
             width: 100%;
-            padding: 6px 8px;
-            border-radius: 6px;
-            border: 1px solid #ccc;
-            font-size: 0.9rem;
-            background: #fff;
+            min-height: 44px;
+            padding: 8px 12px;
+            border-radius: 12px;
+            border: 1.5px solid rgba(255,255,255,0.5);
+            font-size: 16px;
+            background: rgba(255,255,255,0.95);
+            color: var(--ink);
         }
-        .ios-msg { margin-top: 6px; font-size: 0.82rem; color: var(--text-light); display: none; }
+        .ios-msg { margin-top: 8px; font-size: 0.9rem; color: var(--on-brand); display: none; }
 
-        .shortcut-hint {
-            text-align: center;
-            font-size: 0.72rem;
-            color: rgba(255,255,255,0.45);
-            margin-bottom: 10px;
+        /* ---- Barre de transport fixe ---- */
+        .transport {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            z-index: 30;
+            display: flex;
+            gap: 10px;
+            padding: 12px 16px calc(env(safe-area-inset-bottom) + 12px);
+            padding-left: max(16px, env(safe-area-inset-left));
+            padding-right: max(16px, env(safe-area-inset-right));
+            background: var(--brand-deep);
+            border-top: 1px solid var(--line);
+            box-shadow: 0 -6px 20px rgba(0,0,0,0.35);
+        }
+        @media (min-width: 520px) {
+            .transport { left: 50%; transform: translateX(-50%); width: 520px; }
+        }
+        .btn-main {
+            flex: 1;
+            min-height: 60px;
+            border-radius: 14px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            cursor: pointer;
+            user-select: none;
+            touch-action: none;
+            -webkit-tap-highlight-color: transparent;
+            border: 2px solid transparent;
+        }
+        .btn-play {
+            background: var(--go);
+            color: #fff;
+            border-color: #0c8a48;
+        }
+        .btn-play.active {
+            background: var(--stop);
+            border-color: #a82a23;
+        }
+        .btn-hold {
+            background: rgba(255,255,255,0.14);
+            color: #fff;
+            border-color: rgba(255,255,255,0.5);
+        }
+        .btn-hold.active {
+            background: var(--hold);
+            border-color: #8c6708;
+            color: #fff;
+        }
+        .btn-main .icon { font-size: 1.1rem; }
+
+        /* ---- Focus visible (2.4.7 / 2.4.13) ---- */
+        button:focus-visible,
+        input:focus-visible,
+        select:focus-visible,
+        .ds-handle:focus-visible,
+        .preset-name-input:focus-visible {
+            outline: 3px solid var(--focus);
+            outline-offset: 2px;
+        }
+        .knob-slider:focus-visible,
+        .hs-range:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; border-radius: 6px; }
+
+        @media (prefers-reduced-motion: reduce) {
+            * { transition: none !important; }
         }
     </style>
 </head>
+
 <body>
-<div class="app-container">
-    <h2>Wave Generator</h2>
-
-    <div class="btn-row">
-        <div class="btn-main btn-play" id="btnPlay">
-            <span class="icon">▶</span><span id="playLabel">Play</span>
+<div class="app">
+    <header class="app-header">
+        <h1>Wave Generator</h1>
+        <div class="vis-container" aria-hidden="true">
+            <canvas class="scope-canvas" id="scopeCanvas"></canvas>
+            <canvas class="vu-canvas" id="vuCanvas"></canvas>
         </div>
-        <div class="btn-main btn-hold" id="btnHold">
-            <span>⏸</span><span>Hold</span>
-        </div>
-    </div>
+    </header>
 
-    <div class="shortcut-hint">Espace = Play/Stop &nbsp;|&nbsp; H = Hold</div>
+    <main class="scroller">
+        <section class="card" aria-label="Réglages principaux">
+            <div class="wave-select" id="waveSelect" role="group" aria-label="Forme d'onde"></div>
+            <div class="sliders-grid" id="knobsGrid"></div>
+        </section>
 
-    <div class="vis-container">
-        <canvas class="scope-canvas" id="scopeCanvas"></canvas>
-        <canvas class="vu-canvas" id="vuCanvas"></canvas>
-    </div>
-
-    <div class="card-custom">
-        <div class="sliders-grid" id="knobsGrid"></div>
-    </div>
-
-    <div class="sweep-section">
-        <div class="sweep-header">
-            <span>⟷ Freq Sweep</span>
-            <input type="checkbox" class="toggle-ios" id="sweepToggle">
-        </div>
-        <div id="sweepBody">
-            <div style="text-align:center;font-family:monospace;font-size:0.85rem;" id="sweepLabel">50 Hz - 1200 Hz</div>
-            <div class="dual-slider-wrap" id="sweepSlider">
-                <div class="ds-track"></div>
-                <div class="ds-fill" id="sweepFill"></div>
-                <div class="ds-handle" id="sweepH1"></div>
-                <div class="ds-handle" id="sweepH2"></div>
+        <section class="card acc collapsed" data-acc="sweep">
+            <div class="sweep-header acc-toggle">
+                <span class="section-title" style="margin:0"><span class="acc-chevron">▸</span> ⟷ Freq Sweep</span>
+                <input type="checkbox" class="toggle-ios" id="sweepToggle" aria-label="Activer le balayage de fréquence">
             </div>
-            <div class="sweep-controls">
-                <label class="sweep-toggle-label">
-                    <input type="checkbox" class="toggle-ios" id="invertToggle">
-                    <span>⇄ Inverser</span>
-                </label>
-                <label class="sweep-toggle-label">
-                    <input type="checkbox" class="toggle-ios" id="doubleToggle">
-                    <span>⋀ Double</span>
+            <div id="sweepBody" class="acc-body">
+                <div class="sweep-label" id="sweepLabel">50 Hz — 1200 Hz</div>
+                <div class="dual-slider-wrap" id="sweepSlider">
+                    <div class="ds-track"></div>
+                    <div class="ds-fill" id="sweepFill"></div>
+                    <div class="ds-handle" id="sweepH1" tabindex="0" role="slider" aria-label="Fréquence basse du balayage"></div>
+                    <div class="ds-handle" id="sweepH2" tabindex="0" role="slider" aria-label="Fréquence haute du balayage"></div>
+                </div>
+                <div class="sweep-controls">
+                    <label class="sweep-toggle-label">
+                        <input type="checkbox" class="toggle-ios" id="invertToggle" aria-label="Inverser le balayage">
+                        <span>⇄ Inverser</span>
+                    </label>
+                    <label class="sweep-toggle-label">
+                        <input type="checkbox" class="toggle-ios" id="doubleToggle" aria-label="Doubler le balayage">
+                        <span>⋀ Double</span>
+                    </label>
+                </div>
+            </div>
+        </section>
+
+        <section class="card acc collapsed" data-acc="detune" aria-label="Réglages stéréo et détune">
+            <div class="section-title acc-toggle"><span class="acc-chevron">▸</span> 🎚 Stéréo &amp; Détune</div>
+            <div id="slidersWrap" class="acc-body"></div>
+        </section>
+
+        <section class="card acc collapsed" id="autoPanPanel" data-acc="pan">
+            <div class="sweep-header acc-toggle">
+                <span class="section-title" style="margin:0"><span class="acc-chevron">▸</span> 🔄 Auto-Pan / Orbit</span>
+                <input type="checkbox" class="toggle-ios" id="panToggle" aria-label="Activer l'auto-pan stéréo">
+            </div>
+            <div id="panBody" class="acc-body">
+                <div class="hs-label-row"><label>Sync rythme</label></div>
+                <div class="seg-row" id="panSyncSeg" role="group" aria-label="Synchronisation du pan sur le rythme">
+                    <button type="button" class="seg-btn" data-sync="free" aria-label="Pan libre">Libre</button>
+                    <button type="button" class="seg-btn" data-sync="half" aria-label="Pan synchronisé demi-vitesse">÷2</button>
+                    <button type="button" class="seg-btn" data-sync="x1" aria-label="Pan synchronisé même vitesse">×1</button>
+                    <button type="button" class="seg-btn" data-sync="x2" aria-label="Pan synchronisé double vitesse">×2</button>
+                </div>
+                <div class="hs-row" id="panRateRow">
+                    <div class="hs-label-row">
+                        <label for="panRate">Vitesse</label>
+                        <span class="hs-val" id="panRateVal"></span>
+                    </div>
+                    <div class="horiz-slider-wrap">
+                        <button type="button" class="hs-btn" id="panRateMinus" aria-label="Diminuer la vitesse">−</button>
+                        <input type="range" class="hs-range" id="panRate" min="0.02" max="4" step="0.02" aria-label="Vitesse de l'auto-pan">
+                        <button type="button" class="hs-btn" id="panRatePlus" aria-label="Augmenter la vitesse">+</button>
+                    </div>
+                </div>
+                <div class="hs-row" id="panPhaseRow">
+                    <div class="hs-label-row">
+                        <label for="panPhase">Phase</label>
+                        <span class="hs-val" id="panPhaseVal"></span>
+                    </div>
+                    <div class="horiz-slider-wrap">
+                        <button type="button" class="hs-btn" id="panPhaseMinus" aria-label="Diminuer la phase">−</button>
+                        <input type="range" class="hs-range" id="panPhase" min="0" max="360" step="5" aria-label="Déphasage du pan">
+                        <button type="button" class="hs-btn" id="panPhasePlus" aria-label="Augmenter la phase">+</button>
+                    </div>
+                </div>
+                <div class="hs-row">
+                    <div class="hs-label-row">
+                        <label for="panDepth">Largeur</label>
+                        <span class="hs-val" id="panDepthVal"></span>
+                    </div>
+                    <div class="horiz-slider-wrap">
+                        <button type="button" class="hs-btn" id="panDepthMinus" aria-label="Diminuer la largeur">−</button>
+                        <input type="range" class="hs-range" id="panDepth" min="0" max="100" step="1" aria-label="Largeur de l'auto-pan">
+                        <button type="button" class="hs-btn" id="panDepthPlus" aria-label="Augmenter la largeur">+</button>
+                    </div>
+                </div>
+                <div class="hs-row" id="panRatioRow">
+                    <div class="hs-label-row">
+                        <label for="panRatio">Ratio</label>
+                        <span class="hs-val" id="panRatioVal"></span>
+                    </div>
+                    <div class="horiz-slider-wrap">
+                        <button type="button" class="hs-btn" id="panRatioMinus" aria-label="Diminuer le ratio">−</button>
+                        <input type="range" class="hs-range" id="panRatio" min="20" max="80" step="1" aria-label="Ratio de l'auto-pan">
+                        <button type="button" class="hs-btn" id="panRatioPlus" aria-label="Augmenter le ratio">+</button>
+                    </div>
+                </div>
+                <label class="pan-link-label">
+                    <input type="checkbox" class="toggle-ios" id="panLinkRatio" aria-label="Lier le ratio du pan au ratio d'amplitude">
+                    <span>🔗 Lier au ratio d'amplitude</span>
                 </label>
             </div>
-        </div>
-    </div>
+        </section>
 
-    <div class="card-custom">
-        <div id="slidersWrap"></div>
-    </div>
+        <section class="card acc collapsed" data-acc="presets">
+            <div class="section-title acc-toggle"><span class="acc-chevron">▸</span> 🎛 Préréglages</div>
+            <div class="acc-body">
+                <div class="preset-row" id="builtinPresets"></div>
+                <div class="preset-row" id="userPresets"></div>
+                <div class="preset-save-row">
+                    <input type="text" class="preset-name-input" id="presetNameInput" placeholder="Nom du préréglage…" aria-label="Nom du préréglage">
+                    <button type="button" class="btn-save-preset" id="btnSavePreset">💾 Sauver</button>
+                </div>
+            </div>
+        </section>
 
-    <div class="presets-section">
-        <div class="presets-title">🎛 Préréglages</div>
-        <div class="preset-row" id="builtinPresets"></div>
-        <div class="preset-row" id="userPresets"></div>
-        <div class="preset-save-row">
-            <input type="text" class="preset-name-input" id="presetNameInput" placeholder="Nom du préréglage…">
-            <div class="btn-save-preset" id="btnSavePreset">💾 Sauvegarder</div>
-        </div>
-    </div>
-
-    <div class="device-section">
-        <label>Sortie Audio :</label>
-        <select id="deviceSelect">
-            <option value="">Sélection par défaut</option>
-        </select>
-        <div class="ios-msg" id="iosDeviceMsg">Le son est dirigé vers le périphérique iOS par défaut.</div>
-    </div>
+        <section class="panel device-section acc collapsed" id="deviceSection" data-acc="device">
+            <div class="section-title acc-toggle"><span class="acc-chevron">▸</span> 🔊 Sortie audio</div>
+            <div class="acc-body">
+                <select id="deviceSelect" style="margin-top:4px">
+                    <option value="">Sélection par défaut</option>
+                </select>
+            </div>
+        </section>
+        <p class="ios-msg" id="iosDeviceMsg">Le son est dirigé vers le périphérique iOS par défaut.</p>
+    </main>
 </div>
 
+<nav class="transport" aria-label="Lecture">
+    <button type="button" class="btn-main btn-play" id="btnPlay" aria-pressed="false">
+        <span class="icon" aria-hidden="true">▶</span><span>Play</span>
+    </button>
+    <button type="button" class="btn-main btn-hold" id="btnHold" aria-pressed="false">
+        <span class="icon" aria-hidden="true">⏸</span><span>Hold</span>
+    </button>
+</nav>
+
 <script>
+// ============================================================
+//  Wave Generator — moteur audio + UI
+//  Logique audio inchangée. UI rendue avec de vrais <button>
+//  accessibles (libellés ARIA, focus clavier).
+// ============================================================
+
 // --- MATH UTILS ---
 function warpPhase(t, r) {
     const r2 = r*r, r3 = r2*r;
@@ -515,9 +737,12 @@ const STORAGE_KEY = 'stimgen_v10_wave_generator';
 const USER_PRESETS_KEY = 'stimgen_v10_user_presets';
 
 const defaultState = {
+    waveform: 'sine',
     freq: 700, volume: 60, rythm: 0.5, depth: 0, emphasis: 0, ratio: 50,
     sweepActive: false, sweepLo: 500, sweepHi: 900, invertSweep: false, doubleSweep: false,
-    balance: 0, phase: 0, detuneOffset: 0, detuneDepth: 0, subOctave: 0
+    balance: 0, phase: 0, detuneOffset: 0, detuneDepth: 0, subOctave: 0,
+    panActive: false, panRate: 0.3, panDepth: 70, panRatio: 50,
+    panSync: 'free', panPhase: 0, panLinkRatio: false
 };
 
 let state = Object.assign({}, defaultState);
@@ -527,10 +752,14 @@ function loadState() {
         const s = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
         Object.assign(state, s);
     } catch(e) {}
-    // Sanitize
     state.sweepLo = Math.max(50, Math.min(1190, state.sweepLo || 500));
     state.sweepHi = Math.max(state.sweepLo + 10, Math.min(1200, state.sweepHi || 900));
-    // Ensure all keys exist
+    state.panRate = Math.max(0.02, Math.min(4, state.panRate || 0.3));
+    state.panDepth = Math.max(0, Math.min(100, state.panDepth ?? 70));
+    state.panRatio = Math.max(20, Math.min(80, state.panRatio ?? 50));
+    if (!['free','half','x1','x2'].includes(state.panSync)) state.panSync = 'free';
+    state.panPhase = Math.max(0, Math.min(360, state.panPhase || 0));
+    state.panLinkRatio = !!state.panLinkRatio;
     Object.keys(defaultState).forEach(k => {
         if (state[k] === undefined) state[k] = defaultState[k];
     });
@@ -541,11 +770,12 @@ function saveState() {
 }
 
 const BUILTIN_PRESETS = [
-    { name: 'Défaut',    state: { freq:700,  volume:60, rythm:0.5,  depth:0,  ratio:50, balance:0, phase:0, detuneOffset:0,   detuneDepth:0,  subOctave:0,  sweepActive:false } },
-    { name: 'Delta',     state: { freq:200,  volume:60, rythm:2,    depth:80, ratio:50, balance:0, phase:0, detuneOffset:2,   detuneDepth:30, subOctave:0,  sweepActive:false } },
-    { name: 'Theta',     state: { freq:432,  volume:60, rythm:6,    depth:70, ratio:50, balance:0, phase:0, detuneOffset:6,   detuneDepth:20, subOctave:0,  sweepActive:false } },
-    { name: 'Alpha',     state: { freq:528,  volume:60, rythm:10,   depth:60, ratio:50, balance:0, phase:0, detuneOffset:10,  detuneDepth:20, subOctave:0,  sweepActive:false } },
-    { name: 'Sweep ♭',  state: { freq:200,  volume:60, rythm:0.2,  depth:40, ratio:50, balance:0, phase:0, detuneOffset:0,   detuneDepth:0,  subOctave:60, sweepActive:true, sweepLo:80, sweepHi:400 } },
+    { name: 'Défaut',    state: { freq:700,  volume:60, rythm:0.5,  depth:0,  ratio:50, balance:0, phase:0, detuneOffset:0,   detuneDepth:0,  subOctave:0,  sweepActive:false, panActive:false } },
+    { name: 'Delta',     state: { freq:200,  volume:60, rythm:2,    depth:80, ratio:50, balance:0, phase:0, detuneOffset:2,   detuneDepth:30, subOctave:0,  sweepActive:false, panActive:false } },
+    { name: 'Theta',     state: { freq:432,  volume:60, rythm:6,    depth:70, ratio:50, balance:0, phase:0, detuneOffset:6,   detuneDepth:20, subOctave:0,  sweepActive:false, panActive:false } },
+    { name: 'Alpha',     state: { freq:528,  volume:60, rythm:10,   depth:60, ratio:50, balance:0, phase:0, detuneOffset:10,  detuneDepth:20, subOctave:0,  sweepActive:false, panActive:false } },
+    { name: 'Sweep ♭',  state: { freq:200,  volume:60, rythm:0.2,  depth:40, ratio:50, balance:0, phase:0, detuneOffset:0,   detuneDepth:0,  subOctave:60, sweepActive:true, sweepLo:80, sweepHi:400, panActive:false } },
+    { name: 'Orbit',     state: { freq:600,  volume:60, rythm:0.6,  depth:60, ratio:50, balance:0, phase:0, detuneOffset:0,   detuneDepth:0,  subOctave:0,  sweepActive:false, panActive:true, panRate:0.4, panDepth:85, panRatio:50, panSync:'x1', panPhase:90, panLinkRatio:false } },
 ];
 
 function loadUserPresets() {
@@ -560,7 +790,7 @@ function applyPreset(ps) {
     Object.keys(defaultState).forEach(k => { if (state[k] === undefined) state[k] = defaultState[k]; });
     saveState();
     syncAllUI();
-    if (audioInit) { updateModBuffer(); updateAudioParams(); }
+    if (audioInit) { updateModBuffer(); updatePanBuffer(); updateAudioParams(); }
 }
 
 // --- AUDIO ---
@@ -569,6 +799,7 @@ let merger, masterG, analyserL, analyserR, analyserDetune;
 let carrierOsc, carrierMix1, carrierOscDetune, carrierMix2, carrierOscH2, harmonicGain;
 let balL, balR, amGainL, amGainR, depthGainL, depthGainR, amGainDetune;
 let modOsc, delayModL, delayModR, sweepShaper, sweepLFOGain, subSweepGain, detuneConstant;
+let panOsc, panShaperL, panShaperR;
 
 function initAudio() {
     if (audioInit) return;
@@ -578,11 +809,14 @@ function initAudio() {
     masterG = ctx.createGain(); masterG.gain.value = 0;
     merger.connect(masterG); masterG.connect(ctx.destination);
 
-    const monL = ctx.createGain(), monR = ctx.createGain();
-    masterG.connect(monL); masterG.connect(monR);
+    // Métrage L/R réel : on sépare les deux canaux post-master avec un
+    // ChannelSplitter, au lieu d'analyser le mixage mono. Balance, déphasage
+    // et auto-pan deviennent ainsi distinctement visibles à l'oscilloscope.
+    const scopeSplit = ctx.createChannelSplitter(2);
+    masterG.connect(scopeSplit);
 
-    analyserL = ctx.createAnalyser(); analyserL.fftSize = 2048; monL.connect(analyserL);
-    analyserR = ctx.createAnalyser(); analyserR.fftSize = 2048; monR.connect(analyserR);
+    analyserL = ctx.createAnalyser(); analyserL.fftSize = 2048; scopeSplit.connect(analyserL, 0);
+    analyserR = ctx.createAnalyser(); analyserR.fftSize = 2048; scopeSplit.connect(analyserR, 1);
     analyserDetune = ctx.createAnalyser(); analyserDetune.fftSize = 2048;
 
     carrierOsc = ctx.createOscillator(); carrierMix1 = ctx.createGain();
@@ -601,6 +835,17 @@ function initAudio() {
     balL = ctx.createGain(); balR = ctx.createGain();
     mainSum.connect(amGainL); amGainL.connect(balL); balL.connect(merger, 0, 0);
     mainSum.connect(amGainR); amGainR.connect(balR); balR.connect(merger, 0, 1);
+
+    // Auto-pan : la Balance fixe la position centrale du panoramique et le
+    // LFO (buffer warpPhase) fait osciller cette position autour du centre.
+    // La conversion position → gains L/R suit une loi unique (la même que la
+    // Balance statique) appliquée par deux WaveShapers pilotés par le LFO ;
+    // les courbes sont (re)calculées dans updateAudioParams. balL/balR.gain
+    // sont entièrement pilotés par les shapers (valeur intrinsèque nulle).
+    balL.gain.value = 0; balR.gain.value = 0;
+    panShaperL = ctx.createWaveShaper(); panShaperL.curve = panCurve('L', state.balance/100, 0);
+    panShaperR = ctx.createWaveShaper(); panShaperR.curve = panCurve('R', state.balance/100, 0);
+    panShaperL.connect(balL.gain); panShaperR.connect(balR.gain);
 
     delayModL = ctx.createDelay(5.0); delayModR = ctx.createDelay(5.0);
     depthGainL = ctx.createGain(); depthGainR = ctx.createGain();
@@ -625,11 +870,15 @@ function initAudio() {
     carrierOsc.start(); carrierOscDetune.start(); carrierOscH2.start(); detuneConstant.start();
 
     updateModBuffer();
+    updatePanBuffer();
     updateAudioParams();
     audioInit = true;
 }
 
 let currentPhaseIntegrator = 0;
+let panPhaseIntegrator = 0;
+// Multiplicateurs de synchro du pan (null = mode Libre).
+const PAN_MULTS = { free: null, half: 0.5, x1: 1, x2: 2 };
 function updateModBuffer() {
     if (!ctx) return;
     const size = ctx.sampleRate;
@@ -649,12 +898,66 @@ function updateModBuffer() {
     modOsc = newOsc;
 }
 
+// Courbe d'un WaveShaper convertissant la valeur du LFO (∈[-1,1]) en gain
+// d'un canal. La position de pan p = balance + largeur·LFO est bornée à
+// [-1,1], puis convertie par une loi de panoramique à PUISSANCE CONSTANTE
+// (cos/sin) : les deux canaux varient toujours en sens opposé simultanément
+// (L = cos, R = sin), l'énergie totale L²+R² restant constante. Centre =
+// 0.707 par canal ; rails = 1 / 0. largeur = 0 ⇒ courbe plate = Balance statique.
+function panCurve(side, b, depth) {
+    const N = 512;
+    const c = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+        const x = (i/(N-1))*2 - 1;
+        let p = b + depth * x;
+        if (p > 1) p = 1; else if (p < -1) p = -1;
+        const theta = (p + 1) * (Math.PI / 4);   // p∈[-1,1] → θ∈[0, π/2]
+        c[i] = side === 'L' ? Math.cos(theta) : Math.sin(theta);
+    }
+    return c;
+}
+
+function updatePanBuffer() {
+    if (!ctx) return;
+    const size = ctx.sampleRate;
+    const buf = ctx.createBuffer(1, size, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    // En mode lié, l'orbite emprunte le ratio de la modulation d'amplitude.
+    const effRatio = (state.panLinkRatio ? state.ratio : state.panRatio) / 100;
+    for (let i = 0; i < size; i++) data[i] = Math.sin(2 * Math.PI * warpPhase(i/size, effRatio));
+
+    // En sync, la phase du pan est verrouillée sur celle du rythme (× mult)
+    // décalée du déphasage choisi ; le lock audio est assuré par un
+    // playbackRate proportionnel (cf. updateAudioParams).
+    const mult = PAN_MULTS[state.panSync];
+    const synced = mult !== null;
+    if (synced) {
+        panPhaseIntegrator = (((currentPhaseIntegrator * mult + state.panPhase/360) % 1.0) + 1.0) % 1.0;
+    }
+    const rate = synced ? state.rythm * mult : state.panRate;
+
+    const newOsc = ctx.createBufferSource();
+    newOsc.buffer = buf; newOsc.loop = true;
+    newOsc.playbackRate.value = state.hold ? 0 : rate;
+    newOsc.connect(panShaperL); newOsc.connect(panShaperR);
+
+    const now = ctx.currentTime;
+    newOsc.start(now, (panPhaseIntegrator % 1.0) * buf.duration);
+    if (panOsc) { panOsc.stop(now); try { panOsc.disconnect(); } catch(e) {} }
+    panOsc = newOsc;
+}
+
 function updateAudioParams() {
     if (!ctx) return;
     const now = ctx.currentTime;
 
     masterG.gain.setTargetAtTime(state.playing ? state.volume / 100 : 0, now, 0.05);
     if (modOsc) modOsc.playbackRate.setTargetAtTime(state.hold ? 0 : state.rythm, now, 0.05);
+
+    // Forme d'onde appliquée à la porteuse principale + détune.
+    // La sous-octave (carrierOscH2) reste sinus pour des basses propres.
+    const wf = state.waveform || 'sine';
+    if (carrierOsc.type !== wf) { carrierOsc.type = wf; carrierOscDetune.type = wf; }
 
     const cf = state.sweepActive ? (state.sweepLo + state.sweepHi)/2 : state.freq;
     carrierOsc.frequency.setTargetAtTime(cf, now, 0.05);
@@ -677,8 +980,17 @@ function updateAudioParams() {
     depthGainL.gain.setTargetAtTime(depth/2, now, 0.05);
     depthGainR.gain.setTargetAtTime(depth/2, now, 0.05);
 
-    balL.gain.setTargetAtTime(state.balance > 0 ? 1 - state.balance/100 : 1, now, 0.05);
-    balR.gain.setTargetAtTime(state.balance < 0 ? 1 + state.balance/100 : 1, now, 0.05);
+    // Balance = centre du panoramique ; l'auto-pan (largeur pd) fait osciller
+    // la position autour de ce centre. Les WaveShapers appliquent la loi de
+    // pan à puissance constante (L/R toujours en sens opposé) au LFO ;
+    // pd=0 ⇒ courbe plate = Balance statique.
+    const b = state.balance / 100;
+    const pd = state.panActive ? state.panDepth / 100 : 0;
+    panShaperL.curve = panCurve('L', b, pd);
+    panShaperR.curve = panCurve('R', b, pd);
+    const panMult = PAN_MULTS[state.panSync];
+    const panRate = panMult !== null ? state.rythm * panMult : state.panRate;
+    if (panOsc) panOsc.playbackRate.setTargetAtTime(state.hold ? 0 : panRate, now, 0.05);
 
     let delaySecs = state.rythm > 0.01 ? (Math.abs(state.phase)/360) / state.rythm : 0;
     delaySecs = Math.min(delaySecs, 5.0);
@@ -699,14 +1011,49 @@ function updateAudioParams() {
     }
 }
 
+// --- WAVEFORM SELECTOR ---
+// Glyphes SVG (currentColor → suivent la couleur du bouton, actif ou non).
+const WAVEFORMS = [
+    { id:'sine',     label:'Sinus',    d:'M2,8 Q6.5,1 11,8 T20,8' },
+    { id:'square',   label:'Carré',    d:'M2,13 L2,4 L9,4 L9,13 L16,13 L16,4 L22,4' },
+    { id:'triangle', label:'Triangle', d:'M2,13 L7,4 L12,13 L17,4 L22,13' },
+    { id:'sawtooth', label:'Scie',     d:'M2,13 L9,4 L9,13 L16,4 L16,13 L22,4' }
+];
+
+function renderWaveSelect() {
+    const box = document.getElementById('waveSelect');
+    if (!box) return;
+    box.innerHTML = '';
+    WAVEFORMS.forEach(w => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'wave-btn';
+        b.setAttribute('aria-pressed', state.waveform === w.id ? 'true' : 'false');
+        b.setAttribute('aria-label', "Forme d'onde " + w.label);
+        b.innerHTML =
+            '<svg class="wave-glyph" viewBox="0 0 24 16" fill="none" stroke="currentColor" ' +
+            'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="' + w.d + '"></path></svg>' +
+            '<span>' + w.label + '</span>';
+        b.addEventListener('click', () => {
+            if (state.waveform === w.id) return;
+            state.waveform = w.id;
+            renderWaveSelect();
+            if (audioInit) updateAudioParams();
+            saveState();
+        });
+        box.appendChild(b);
+    });
+}
+
 // --- KNOBS (grid sliders) ---
 const knobsDef = [
-    { id:'freq',     label:'Fréquence', min:50,  max:1200, step:10,   color:'#1a7a8a', fmt: v => v+' Hz' },
-    { id:'volume',   label:'Volume',    min:0,   max:100,  step:1,    color:'#b87830', fmt: v => v+' %' },
-    { id:'rythm',    label:'Rythm',     min:0,   max:5,    step:0.05, color:'#2a6aaa', fmt: v => (+v).toFixed(2)+' Hz' },
-    { id:'depth',    label:'Depth',     min:0,   max:100,  step:1,    color:'#2a8a5a', fmt: v => v+' %' },
-    { id:'emphasis', label:'Emphasis',  min:0,   max:100,  step:1,    color:'#7a4a8a', fmt: v => v+' %', disabled:true },
-    { id:'ratio',    label:'Ratio',     min:20,  max:80,   step:1,    color:'#aa5a4a', fmt: v => v+'/'+(100-v) }
+    { id:'freq',     label:'Fréquence', min:50,  max:1200, step:10,   color:'#0f6b7a', fmt: v => v+' Hz' },
+    { id:'volume',   label:'Volume',    min:0,   max:100,  step:1,    color:'#9c5e16', fmt: v => v+' %' },
+    { id:'rythm',    label:'Rythm',     min:0,   max:5,    step:0.05, color:'#245fa6', fmt: v => (+v).toFixed(2)+' Hz' },
+    { id:'depth',    label:'Depth',     min:0,   max:100,  step:1,    color:'#1f7a4d', fmt: v => v+' %' },
+    { id:'emphasis', label:'Emphasis',  min:0,   max:100,  step:1,    color:'#6d3f80', fmt: v => v+' %', disabled:true },
+    { id:'ratio',    label:'Ratio',     min:20,  max:80,   step:1,    color:'#a04335', fmt: v => v+'/'+(100-v) }
 ];
 const knobRefs = {};
 
@@ -718,6 +1065,10 @@ function holdRepeat(el, fn) {
     el.addEventListener('touchstart', go, { passive: false });
     window.addEventListener('mouseup', stop);
     window.addEventListener('touchend', stop);
+    // Accessibilité clavier : Entrée / Espace déclenchent un pas
+    el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ' || e.code === 'Space') { e.preventDefault(); fn(); }
+    });
 }
 
 function renderKnobs() {
@@ -731,9 +1082,10 @@ function renderKnobs() {
         const hdr = document.createElement('div');
         hdr.className = 'slider-header';
 
-        const lbl = document.createElement('span');
+        const lbl = document.createElement('label');
         lbl.className = 'slider-label';
         lbl.textContent = k.label;
+        lbl.setAttribute('for', 'knob_' + k.id);
 
         const valEl = document.createElement('span');
         valEl.className = 'slider-val';
@@ -744,14 +1096,16 @@ function renderKnobs() {
         const input = document.createElement('input');
         input.type = 'range';
         input.className = 'knob-slider';
+        input.id = 'knob_' + k.id;
         input.min = k.min; input.max = k.max; input.step = k.step;
+        input.setAttribute('aria-label', k.label);
+        if (k.disabled) input.disabled = true;
         const cur = (state[k.id] !== undefined) ? state[k.id] : k.min;
         input.value = cur;
         input.style.setProperty('--thumb-color', k.color);
 
         const setTrack = (v) => {
             const pct = Math.max(0, Math.min(100, ((v - k.min) / (k.max - k.min)) * 100));
-            // Set CSS variable — works on iOS Safari where inline background on the input itself doesn't affect the track
             input.style.setProperty('--fill-pct', pct + '%');
         };
         setTrack(cur);
@@ -762,15 +1116,18 @@ function renderKnobs() {
             const v = Math.round(parseFloat(input.value) / k.step) * k.step;
             state[k.id] = v;
             setTrack(v); valEl.textContent = k.fmt(v);
-            if (k.id === 'ratio') updateModBuffer();
+            if (k.id === 'ratio') { updateModBuffer(); if (state.panLinkRatio) { updatePanBuffer(); updatePanUI(); } }
             if (audioInit) updateAudioParams();
             saveState(); updateHSDisplays();
         });
 
         const btnRow = document.createElement('div');
         btnRow.className = 'knob-btn-row';
-        const btnM = document.createElement('div'); btnM.className = 'knob-btn'; btnM.textContent = '−';
-        const btnP = document.createElement('div'); btnP.className = 'knob-btn'; btnP.textContent = '+';
+        const btnM = document.createElement('button'); btnM.type = 'button'; btnM.className = 'knob-btn'; btnM.textContent = '−';
+        btnM.setAttribute('aria-label', 'Diminuer ' + k.label);
+        const btnP = document.createElement('button'); btnP.type = 'button'; btnP.className = 'knob-btn'; btnP.textContent = '+';
+        btnP.setAttribute('aria-label', 'Augmenter ' + k.label);
+        if (k.disabled) { btnM.disabled = true; btnP.disabled = true; }
 
         const updateKnob = (nv) => {
             if (k.id === 'freq' && state.sweepActive) return;
@@ -778,7 +1135,7 @@ function renderKnobs() {
             state[k.id] = nv;
             input.value = nv;
             setTrack(nv); valEl.textContent = k.fmt(nv);
-            if (k.id === 'ratio') updateModBuffer();
+            if (k.id === 'ratio') { updateModBuffer(); if (state.panLinkRatio) { updatePanBuffer(); updatePanUI(); } }
             if (audioInit) updateAudioParams();
             saveState(); updateHSDisplays();
         };
@@ -829,18 +1186,23 @@ function renderSliders() {
     wrap.innerHTML = '';
     hsDef.forEach(s => {
         const row = document.createElement('div');
+        row.className = 'hs-row';
 
         const lblRow = document.createElement('div');
         lblRow.className = 'hs-label-row';
-        const lbl = document.createElement('span'); lbl.textContent = s.label;
+        const lbl = document.createElement('label'); lbl.textContent = s.label; lbl.setAttribute('for', 'hs_' + s.id);
         const valEl = document.createElement('span'); valEl.className = 'hs-val'; valEl.id = 'hsval_' + s.id;
         lblRow.appendChild(lbl); lblRow.appendChild(valEl);
 
         const cw = document.createElement('div'); cw.className = 'horiz-slider-wrap';
-        const btnM = document.createElement('div'); btnM.className = 'hs-btn'; btnM.textContent = '−';
-        const btnP = document.createElement('div'); btnP.className = 'hs-btn'; btnP.textContent = '+';
+        const btnM = document.createElement('button'); btnM.type = 'button'; btnM.className = 'hs-btn'; btnM.textContent = '−';
+        btnM.setAttribute('aria-label', 'Diminuer ' + s.label);
+        const btnP = document.createElement('button'); btnP.type = 'button'; btnP.className = 'hs-btn'; btnP.textContent = '+';
+        btnP.setAttribute('aria-label', 'Augmenter ' + s.label);
         const range = document.createElement('input'); range.type = 'range';
         range.className = 'hs-range';
+        range.id = 'hs_' + s.id;
+        range.setAttribute('aria-label', s.label);
         range.min = s.min; range.max = s.max; range.step = s.step;
         const cur = (state[s.id] !== undefined) ? state[s.id] : 0;
         range.value = cur;
@@ -881,19 +1243,17 @@ function updateHSDisplays() {
 }
 
 function syncAllUI() {
+    renderWaveSelect();
     renderKnobs();
     renderSliders();
     updateSweepUI();
+    updatePanUI();
     document.getElementById('invertToggle').checked = !!state.invertSweep;
     document.getElementById('doubleToggle').checked = !!state.doubleSweep;
 }
 
 // --- SWEEP ---
-const sWrap = document.getElementById('sweepSlider');
-const sFill = document.getElementById('sweepFill');
-const sH1   = document.getElementById('sweepH1');
-const sH2   = document.getElementById('sweepH2');
-const sBody = document.getElementById('sweepBody');
+let sWrap, sFill, sH1, sH2, sBody;
 
 function updateSweepUI() {
     const minF = 50, maxF = 1200;
@@ -951,6 +1311,19 @@ function bindSweep() {
     window.addEventListener('mouseup', onEnd);
     window.addEventListener('touchend', onEnd);
 
+    // Accessibilité clavier des poignées de sweep
+    const kbHandle = (which) => (e) => {
+        const stepKeys = { ArrowLeft:-10, ArrowDown:-10, ArrowRight:10, ArrowUp:10 };
+        if (!(e.key in stepKeys)) return;
+        e.preventDefault();
+        const d = stepKeys[e.key];
+        if (which === 'h1') state.sweepLo = Math.max(50, Math.min(state.sweepHi-10, state.sweepLo + d));
+        else state.sweepHi = Math.max(state.sweepLo+10, Math.min(1200, state.sweepHi + d));
+        updateSweepUI(); if (audioInit) updateAudioParams(); updateHSDisplays(); saveState();
+    };
+    sH1.addEventListener('keydown', kbHandle('h1'));
+    sH2.addEventListener('keydown', kbHandle('h2'));
+
     document.getElementById('sweepToggle').addEventListener('change', e => {
         state.sweepActive = e.target.checked;
         updateSweepUI(); if (audioInit) updateAudioParams(); updateHSDisplays(); saveState();
@@ -963,12 +1336,121 @@ function bindSweep() {
     });
 }
 
+// --- AUTO-PAN ---
+function updatePanUI() {
+    const rate = document.getElementById('panRate');
+    const depth = document.getElementById('panDepth');
+    const ratio = document.getElementById('panRatio');
+    const phase = document.getElementById('panPhase');
+    if (!rate || !depth || !ratio || !phase) return;
+
+    const synced = PAN_MULTS[state.panSync] !== null;
+    const effRatio = state.panLinkRatio ? state.ratio : state.panRatio;
+
+    rate.value = state.panRate;
+    depth.value = state.panDepth;
+    ratio.value = effRatio;
+    phase.value = state.panPhase;
+    rate.style.setProperty('--hs-fill', Math.max(0, Math.min(100, ((state.panRate - 0.02)/(4 - 0.02))*100)) + '%');
+    depth.style.setProperty('--hs-fill', Math.max(0, Math.min(100, state.panDepth)) + '%');
+    ratio.style.setProperty('--hs-fill', Math.max(0, Math.min(100, ((effRatio - 20)/(80 - 20))*100)) + '%');
+    phase.style.setProperty('--hs-fill', Math.max(0, Math.min(100, (state.panPhase/360)*100)) + '%');
+
+    document.getElementById('panRateVal').textContent = synced
+        ? '⟲ ' + state.panSync.replace('half','÷2').replace('x1','×1').replace('x2','×2')
+        : (+state.panRate).toFixed(2) + ' Hz';
+    document.getElementById('panDepthVal').textContent = state.panDepth === 0 ? 'Centre' : state.panDepth + ' %';
+    document.getElementById('panRatioVal').textContent = effRatio + '/' + (100 - effRatio) + (state.panLinkRatio ? ' 🔗' : '');
+    let pv = state.panPhase + '°';
+    if (state.panPhase === 0 || state.panPhase === 360) pv = '0° (aligné)';
+    else if (state.panPhase === 180) pv = '180° (inversé)';
+    document.getElementById('panPhaseVal').textContent = pv;
+
+    // Boutons de sync
+    document.querySelectorAll('#panSyncSeg .seg-btn').forEach(b => {
+        b.setAttribute('aria-pressed', b.dataset.sync === state.panSync ? 'true' : 'false');
+    });
+
+    // Vitesse inactive en sync ; Phase inactive en mode Libre ; Ratio inactif si lié.
+    document.getElementById('panRateRow').classList.toggle('row-disabled', synced);
+    document.getElementById('panPhaseRow').classList.toggle('row-disabled', !synced);
+    document.getElementById('panRatioRow').classList.toggle('row-disabled', state.panLinkRatio);
+    document.getElementById('panLinkRatio').checked = state.panLinkRatio;
+
+    document.getElementById('panToggle').checked = state.panActive;
+    const body = document.getElementById('panBody');
+    body.style.opacity = state.panActive ? '1' : '0.5';
+    body.style.pointerEvents = state.panActive ? 'auto' : 'none';
+}
+
+function bindAutoPan() {
+    const rate = document.getElementById('panRate');
+    const depth = document.getElementById('panDepth');
+    const ratio = document.getElementById('panRatio');
+    const commit = () => { if (audioInit) updateAudioParams(); saveState(); };
+    const setRate = (v) => {
+        v = Math.round(Math.max(0.02, Math.min(4, v)) / 0.02) * 0.02;
+        state.panRate = +v.toFixed(2);
+        updatePanUI(); commit();
+    };
+    const setDepth = (v) => {
+        state.panDepth = Math.round(Math.max(0, Math.min(100, v)));
+        updatePanUI(); commit();
+    };
+    const setRatio = (v) => {
+        state.panRatio = Math.round(Math.max(20, Math.min(80, v)));
+        updatePanUI();
+        if (audioInit) { updatePanBuffer(); updateAudioParams(); }
+        saveState();
+    };
+    const phase = document.getElementById('panPhase');
+    const setPhase = (v) => {
+        state.panPhase = Math.max(0, Math.min(360, Math.round(v / 5) * 5));
+        updatePanUI();
+        if (audioInit) { updatePanBuffer(); updateAudioParams(); }
+        saveState();
+    };
+    const setSync = (mode) => {
+        if (!(mode in PAN_MULTS)) return;
+        state.panSync = mode;
+        updatePanUI();
+        if (audioInit) { updatePanBuffer(); updateAudioParams(); }
+        saveState();
+    };
+    rate.addEventListener('input', e => setRate(parseFloat(e.target.value)));
+    depth.addEventListener('input', e => setDepth(parseFloat(e.target.value)));
+    ratio.addEventListener('input', e => setRatio(parseFloat(e.target.value)));
+    phase.addEventListener('input', e => setPhase(parseFloat(e.target.value)));
+    holdRepeat(document.getElementById('panRateMinus'), () => setRate(state.panRate - 0.02));
+    holdRepeat(document.getElementById('panRatePlus'),  () => setRate(state.panRate + 0.02));
+    holdRepeat(document.getElementById('panDepthMinus'), () => setDepth(state.panDepth - 1));
+    holdRepeat(document.getElementById('panDepthPlus'),  () => setDepth(state.panDepth + 1));
+    holdRepeat(document.getElementById('panRatioMinus'), () => setRatio(state.panRatio - 1));
+    holdRepeat(document.getElementById('panRatioPlus'),  () => setRatio(state.panRatio + 1));
+    holdRepeat(document.getElementById('panPhaseMinus'), () => setPhase(state.panPhase - 5));
+    holdRepeat(document.getElementById('panPhasePlus'),  () => setPhase(state.panPhase + 5));
+    document.querySelectorAll('#panSyncSeg .seg-btn').forEach(b => {
+        b.addEventListener('click', () => setSync(b.dataset.sync));
+    });
+    document.getElementById('panLinkRatio').addEventListener('change', e => {
+        state.panLinkRatio = e.target.checked;
+        updatePanUI();
+        if (audioInit) { updatePanBuffer(); updateAudioParams(); }
+        saveState();
+    });
+    document.getElementById('panToggle').addEventListener('change', e => {
+        state.panActive = e.target.checked;
+        updatePanUI(); if (audioInit) updateAudioParams(); saveState();
+    });
+    updatePanUI();
+}
+
 // --- PRESETS ---
 function renderPresets() {
     const bi = document.getElementById('builtinPresets');
     bi.innerHTML = '';
     BUILTIN_PRESETS.forEach(p => {
-        const b = document.createElement('div'); b.className = 'preset-btn'; b.textContent = p.name;
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'preset-btn'; b.textContent = p.name;
         b.addEventListener('click', () => applyPreset(p.state));
         bi.appendChild(b);
     });
@@ -979,8 +1461,15 @@ function renderUserPresets() {
     const row = document.getElementById('userPresets');
     row.innerHTML = '';
     loadUserPresets().forEach((p, i) => {
-        const b = document.createElement('div'); b.className = 'preset-btn';
-        b.innerHTML = `${p.name} <span style="opacity:0.6;font-size:0.7em" data-idx="${i}">✕</span>`;
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'preset-btn preset-user';
+        b.appendChild(document.createTextNode(p.name + ' '));
+        const x = document.createElement('span');
+        x.className = 'preset-del';
+        x.textContent = '✕';
+        x.dataset.idx = i;
+        x.setAttribute('role', 'button');
+        x.setAttribute('aria-label', 'Supprimer le préréglage ' + p.name);
+        b.appendChild(x);
         b.addEventListener('click', e => {
             if (e.target.dataset.idx !== undefined) {
                 const list = loadUserPresets(); list.splice(+e.target.dataset.idx, 1);
@@ -991,22 +1480,8 @@ function renderUserPresets() {
     });
 }
 
-document.getElementById('btnSavePreset').addEventListener('click', () => {
-    const name = document.getElementById('presetNameInput').value.trim();
-    if (!name) return;
-    const list = loadUserPresets();
-    const ps = Object.assign({}, state);
-    list.push({ name, state: ps });
-    saveUserPresets(list);
-    document.getElementById('presetNameInput').value = '';
-    renderUserPresets();
-});
-
 // --- VISUALIZERS ---
-const scopeCanvas = document.getElementById('scopeCanvas');
-const vuCanvas    = document.getElementById('vuCanvas');
-const sCtx = scopeCanvas.getContext('2d');
-const vCtx = vuCanvas.getContext('2d');
+let scopeCanvas, vuCanvas, sCtx, vCtx;
 const bufL = new Float32Array(2048), bufR = new Float32Array(2048), bufD = new Float32Array(2048);
 let dpr = 1;
 
@@ -1014,13 +1489,15 @@ function initCanvas() {
     dpr = window.devicePixelRatio || 1;
     const w1 = scopeCanvas.offsetWidth || 280;
     const w2 = vuCanvas.offsetWidth || 30;
-    scopeCanvas.width = w1 * dpr; scopeCanvas.height = 80 * dpr;
-    vuCanvas.width = w2 * dpr;   vuCanvas.height = 80 * dpr;
+    const hh = scopeCanvas.offsetHeight || 96;
+    scopeCanvas.width = w1 * dpr; scopeCanvas.height = hh * dpr;
+    vuCanvas.width = w2 * dpr;   vuCanvas.height = hh * dpr;
+    sCtx.setTransform(1,0,0,1,0,0); vCtx.setTransform(1,0,0,1,0,0);
     sCtx.scale(dpr, dpr); vCtx.scale(dpr, dpr);
 }
 
 function drawScope() {
-    const w = scopeCanvas.offsetWidth || 280, h = 80;
+    const w = scopeCanvas.offsetWidth || 280, h = scopeCanvas.offsetHeight || 96;
     sCtx.fillStyle = '#0a151a';
     sCtx.fillRect(0, 0, w, h);
     sCtx.strokeStyle = 'rgba(255,255,255,0.08)';
@@ -1049,10 +1526,10 @@ function drawScope() {
         const h2 = cf2 < 100 ? 0 : (state.subOctave/100) * subOctaveHMax(cf2);
         const sc = (1-h2)*(state.detuneDepth/100/2)*(state.volume/100);
         for (let i = 0; i < bufD.length; i++) bufD[i] *= sc;
-        trace(bufD, 'rgba(217,127,42,0.7)', 1.5);
+        trace(bufD, 'rgba(240,150,60,0.8)', 1.5);
     }
-    trace(bufL, '#2a6aaa', 2);
-    trace(bufR, '#dc3545', 2);
+    trace(bufL, '#3b86d6', 2.5);
+    trace(bufR, '#ff5c69', 2.5);
 
     let pkL = 0, pkR = 0;
     for (let i = 0; i < bufL.length; i++) {
@@ -1061,8 +1538,8 @@ function drawScope() {
     }
     const vw = vuCanvas.offsetWidth || 30;
     vCtx.clearRect(0,0,vw,h);
-    vCtx.fillStyle = '#2a6aaa'; vCtx.fillRect(2, h-pkL*h, vw/2-3, pkL*h);
-    vCtx.fillStyle = '#dc3545'; vCtx.fillRect(vw/2+1, h-pkR*h, vw/2-3, pkR*h);
+    vCtx.fillStyle = '#3b86d6'; vCtx.fillRect(2, h-pkL*h, vw/2-3, pkL*h);
+    vCtx.fillStyle = '#ff5c69'; vCtx.fillRect(vw/2+1, h-pkR*h, vw/2-3, pkR*h);
 }
 
 let lastTime = performance.now();
@@ -1073,6 +1550,12 @@ function animate() {
 
     if (state.playing && !state.hold) {
         currentPhaseIntegrator = (currentPhaseIntegrator + dt * state.rythm) % 1.0;
+        const mult = PAN_MULTS[state.panSync];
+        if (mult !== null) {
+            panPhaseIntegrator = (((currentPhaseIntegrator * mult + state.panPhase/360) % 1.0) + 1.0) % 1.0;
+        } else {
+            panPhaseIntegrator = (panPhaseIntegrator + dt * state.panRate) % 1.0;
+        }
     }
 
     if (state.sweepActive && state.playing && !state.hold) {
@@ -1089,36 +1572,20 @@ function animate() {
 }
 
 // --- PLAY / HOLD ---
-document.getElementById('btnPlay').addEventListener('click', () => {
-    if (!audioInit) initAudio();
-    if (ctx.state === 'suspended') ctx.resume().then(togglePlay);
-    else togglePlay();
-});
-
 function togglePlay() {
     state.playing = !state.playing;
     const btn = document.getElementById('btnPlay');
     if (state.playing) {
         btn.classList.add('active');
-        btn.innerHTML = '<span class="icon">■</span><span>Stop</span>';
+        btn.setAttribute('aria-pressed', 'true');
+        btn.innerHTML = '<span class="icon" aria-hidden="true">■</span><span>Stop</span>';
     } else {
         btn.classList.remove('active');
-        btn.innerHTML = '<span class="icon">▶</span><span>Play</span>';
+        btn.setAttribute('aria-pressed', 'false');
+        btn.innerHTML = '<span class="icon" aria-hidden="true">▶</span><span>Play</span>';
     }
     if (audioInit) updateAudioParams();
 }
-
-document.getElementById('btnHold').addEventListener('click', () => {
-    state.hold = !state.hold;
-    document.getElementById('btnHold').classList.toggle('active', state.hold);
-    if (audioInit) updateAudioParams();
-});
-
-document.addEventListener('keydown', e => {
-    if (e.target.tagName === 'INPUT' && e.target.type === 'text') return;
-    if (e.code === 'Space') { e.preventDefault(); document.getElementById('btnPlay').click(); }
-    else if (e.key === 'h' || e.key === 'H') document.getElementById('btnHold').click();
-});
 
 // --- DEVICE SELECTOR ---
 function setupDevices() {
@@ -1126,7 +1593,8 @@ function setupDevices() {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
                   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     if (isIOS) {
-        sel.style.display = 'none';
+        const ds = document.getElementById('deviceSection');
+        if (ds) ds.style.display = 'none';
         document.getElementById('iosDeviceMsg').style.display = 'block';
     } else {
         navigator.mediaDevices && navigator.mediaDevices.getUserMedia({ audio: true }).then(() => {
@@ -1144,20 +1612,92 @@ function setupDevices() {
     }
 }
 
+// --- ACCORDÉON ---
+const ACC_KEY = 'stimgen_v10_accordion';
+function loadAccState() { try { return JSON.parse(localStorage.getItem(ACC_KEY) || '{}'); } catch(e) { return {}; } }
+function saveAccState(s) { localStorage.setItem(ACC_KEY, JSON.stringify(s)); }
+
+function initAccordion() {
+    const stored = loadAccState();
+    document.querySelectorAll('[data-acc]').forEach(sec => {
+        const id = sec.dataset.acc;
+        if (id in stored) sec.classList.toggle('collapsed', !!stored[id]);  // sinon : valeur du HTML
+        const head = sec.querySelector('.acc-toggle');
+        if (!head) return;
+        head.setAttribute('role', 'button');
+        head.setAttribute('tabindex', '0');
+        head.setAttribute('aria-expanded', String(!sec.classList.contains('collapsed')));
+        const fromControl = (t) => t.closest('input, label, select, button, .toggle-ios');
+        const toggle = () => {
+            const collapsed = !sec.classList.contains('collapsed');
+            sec.classList.toggle('collapsed', collapsed);
+            head.setAttribute('aria-expanded', String(!collapsed));
+            const s = loadAccState(); s[id] = collapsed; saveAccState(s);
+            // Le balayage positionne ses poignées d'après la largeur du conteneur,
+            // nulle tant que la section est repliée : on recalcule à l'ouverture.
+            if (!collapsed && id === 'sweep' && typeof updateSweepUI === 'function') updateSweepUI();
+        };
+        head.addEventListener('click', e => { if (!fromControl(e.target)) toggle(); });
+        head.addEventListener('keydown', e => {
+            if ((e.key === 'Enter' || e.key === ' ') && !fromControl(e.target)) { e.preventDefault(); toggle(); }
+        });
+    });
+}
+
 // --- BOOT ---
 window.addEventListener('load', () => {
+    sWrap = document.getElementById('sweepSlider');
+    sFill = document.getElementById('sweepFill');
+    sH1   = document.getElementById('sweepH1');
+    sH2   = document.getElementById('sweepH2');
+    sBody = document.getElementById('sweepBody');
+    scopeCanvas = document.getElementById('scopeCanvas');
+    vuCanvas    = document.getElementById('vuCanvas');
+    sCtx = scopeCanvas.getContext('2d');
+    vCtx = vuCanvas.getContext('2d');
+
     loadState();
+    renderWaveSelect();
     renderKnobs();
     renderSliders();
     bindSweep();
+    bindAutoPan();
     renderPresets();
+
+    document.getElementById('btnPlay').addEventListener('click', () => {
+        if (!audioInit) initAudio();
+        if (ctx.state === 'suspended') ctx.resume().then(togglePlay);
+        else togglePlay();
+    });
+    document.getElementById('btnHold').addEventListener('click', () => {
+        state.hold = !state.hold;
+        const hb = document.getElementById('btnHold');
+        hb.classList.toggle('active', state.hold);
+        hb.setAttribute('aria-pressed', state.hold ? 'true' : 'false');
+        if (audioInit) updateAudioParams();
+    });
+    document.addEventListener('keydown', e => {
+        if (e.target.tagName === 'INPUT' && e.target.type === 'text') return;
+        if (e.code === 'Space' && (e.target === document.body)) { e.preventDefault(); document.getElementById('btnPlay').click(); }
+        else if (e.key === 'h' || e.key === 'H') document.getElementById('btnHold').click();
+    });
+
+    document.getElementById('btnSavePreset').addEventListener('click', () => {
+        const name = document.getElementById('presetNameInput').value.trim();
+        if (!name) return;
+        const list = loadUserPresets();
+        const ps = Object.assign({}, state);
+        list.push({ name, state: ps });
+        saveUserPresets(list);
+        document.getElementById('presetNameInput').value = '';
+        renderUserPresets();
+    });
 
     document.getElementById('invertToggle').checked = !!state.invertSweep;
     document.getElementById('doubleToggle').checked = !!state.doubleSweep;
     setupDevices();
+    initAccordion();
 
-    // Wait until the sweep slider has a real width before positioning handles
-    // (iOS may need a few frames after load to complete layout)
     function waitForLayout(attempts) {
         initCanvas();
         updateSweepUI();
@@ -1167,7 +1707,10 @@ window.addEventListener('load', () => {
     }
     requestAnimationFrame(() => waitForLayout(10));
     requestAnimationFrame(animate);
+    window.addEventListener('resize', () => { initCanvas(); updateSweepUI(); });
 });
+
 </script>
-</body>
-</html>
+
+
+</body></html>
