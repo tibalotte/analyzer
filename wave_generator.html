@@ -724,6 +724,21 @@ function warpPhase(t, r) {
     }
 }
 
+// Enveloppe LFO asymétrique à attack et détente indépendants.
+// attack, detente : fractions 0..1 du cycle. Si leur somme > 1, ils sont
+// normalisés. Le reste du cycle est une phase de repos au minimum (-1).
+// Transitions en cosinus pour éviter les discontinuités de dérivée.
+function lfoShape(t, attack, detente) {
+    const a = Math.max(0.02, attack);
+    const d = Math.max(0.02, detente);
+    const sum = a + d;
+    const na = sum > 1 ? a / sum : a;
+    const nd = sum > 1 ? d / sum : d;
+    if (t < na)       return -Math.cos(Math.PI * t / na);           // −1 → +1
+    if (t < na + nd)  return  Math.cos(Math.PI * (t - na) / nd);    // +1 → −1
+    return -1;                                                        // repos
+}
+
 function subOctaveHMax(fMain) {
     const cutoff = 200;
     const Sm = 1 / (1 + (fMain/cutoff)**2);
@@ -739,6 +754,7 @@ const USER_PRESETS_KEY = 'stimgen_v10_user_presets';
 const defaultState = {
     waveform: 'sine',
     freq: 700, volume: 60, rythm: 0.5, depth: 0, emphasis: 0, ratio: 50,
+    attack: 50, detente: 50,
     sweepActive: false, sweepLo: 500, sweepHi: 900, invertSweep: false, doubleSweep: false,
     balance: 0, phase: 0, detuneOffset: 0, detuneDepth: 0, subOctave: 0,
     panActive: false, panRate: 0.3, panDepth: 70, panRatio: 50,
@@ -760,6 +776,8 @@ function loadState() {
     if (!['free','half','x1','x2'].includes(state.panSync)) state.panSync = 'free';
     state.panPhase = Math.max(0, Math.min(360, state.panPhase || 0));
     state.panLinkRatio = !!state.panLinkRatio;
+    state.attack  = Math.max(5, Math.min(95, state.attack  ?? 50));
+    state.detente = Math.max(5, Math.min(95, state.detente ?? 50));
     Object.keys(defaultState).forEach(k => {
         if (state[k] === undefined) state[k] = defaultState[k];
     });
@@ -884,8 +902,7 @@ function updateModBuffer() {
     const size = ctx.sampleRate;
     const buf = ctx.createBuffer(1, size, ctx.sampleRate);
     const data = buf.getChannelData(0);
-    const ratio = state.ratio / 100;
-    for (let i = 0; i < size; i++) data[i] = Math.sin(2 * Math.PI * warpPhase(i/size, ratio));
+    for (let i = 0; i < size; i++) data[i] = lfoShape(i/size, state.attack/100, state.detente/100);
 
     const newOsc = ctx.createBufferSource();
     newOsc.buffer = buf; newOsc.loop = true;
@@ -1052,6 +1069,8 @@ const knobsDef = [
     { id:'volume',   label:'Volume',    min:0,   max:100,  step:1,    color:'#9c5e16', fmt: v => v+' %' },
     { id:'rythm',    label:'Rythm',     min:0,   max:5,    step:0.05, color:'#245fa6', fmt: v => (+v).toFixed(2)+' Hz' },
     { id:'depth',    label:'Depth',     min:0,   max:100,  step:1,    color:'#1f7a4d', fmt: v => v+' %' },
+    { id:'attack',   label:'Attack',    min:5,   max:95,   step:1,    color:'#2e7a6e', fmt: v => v+' %' },
+    { id:'detente',  label:'Détente',   min:5,   max:95,   step:1,    color:'#2e5a8e', fmt: v => v+' %' },
     { id:'emphasis', label:'Emphasis',  min:0,   max:100,  step:1,    color:'#6d3f80', fmt: v => v+' %', disabled:true },
     { id:'ratio',    label:'Ratio',     min:20,  max:80,   step:1,    color:'#a04335', fmt: v => v+'/'+(100-v) }
 ];
@@ -1117,6 +1136,7 @@ function renderKnobs() {
             state[k.id] = v;
             setTrack(v); valEl.textContent = k.fmt(v);
             if (k.id === 'ratio') { updateModBuffer(); if (state.panLinkRatio) { updatePanBuffer(); updatePanUI(); } }
+            if (k.id === 'attack' || k.id === 'detente') updateModBuffer();
             if (audioInit) updateAudioParams();
             saveState(); updateHSDisplays();
         });
@@ -1136,6 +1156,7 @@ function renderKnobs() {
             input.value = nv;
             setTrack(nv); valEl.textContent = k.fmt(nv);
             if (k.id === 'ratio') { updateModBuffer(); if (state.panLinkRatio) { updatePanBuffer(); updatePanUI(); } }
+            if (k.id === 'attack' || k.id === 'detente') updateModBuffer();
             if (audioInit) updateAudioParams();
             saveState(); updateHSDisplays();
         };
@@ -1559,7 +1580,7 @@ function animate() {
     }
 
     if (state.sweepActive && state.playing && !state.hold) {
-        let lfo = Math.sin(2*Math.PI*warpPhase(currentPhaseIntegrator, state.ratio/100));
+        let lfo = lfoShape(currentPhaseIntegrator, state.attack/100, state.detente/100);
         if (state.doubleSweep) lfo = 2*Math.abs(lfo)-1;
         if (state.invertSweep) lfo = -lfo;
         const instFreq = (state.sweepLo+state.sweepHi)/2 + (state.sweepHi-state.sweepLo)/2*lfo;
