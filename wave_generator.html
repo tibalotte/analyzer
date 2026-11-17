@@ -557,6 +557,32 @@
         @media (prefers-reduced-motion: reduce) {
             * { transition: none !important; }
         }
+
+        /* ---- Éditeur de courbe LFO ---- */
+        .curve-canvas {
+            width: 100%; height: 160px; display: block;
+            background: #0a151a; border-radius: 12px;
+            border: 1px solid var(--line);
+            touch-action: none; cursor: crosshair;
+        }
+        .curve-hint {
+            font-size: 0.72rem; color: var(--ink-mute);
+            text-align: center; margin-top: 6px; opacity: 0.8;
+        }
+        .curve-presets {
+            display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;
+        }
+        .curve-preset-btn {
+            flex: 1 1 auto; min-width: 56px; padding: 6px 10px;
+            background: var(--surface-2); border: 1px solid var(--line);
+            border-radius: 8px; color: var(--on-brand); font-size: 0.78rem;
+            cursor: pointer; -webkit-tap-highlight-color: transparent;
+        }
+        .curve-preset-btn:active { background: var(--brand-deep); }
+        .curve-enable-row {
+            display: flex; align-items: center; gap: 10px;
+            margin-top: 10px; font-size: 0.85rem; cursor: pointer;
+        }
     </style>
 </head>
 
@@ -671,6 +697,24 @@
             </div>
         </section>
 
+        <section class="card acc collapsed" data-acc="curve">
+            <div class="section-title acc-toggle"><span class="acc-chevron">▸</span> 〜 Courbe LFO</div>
+            <div class="acc-body">
+                <div class="curve-presets" id="curvePresets">
+                    <button class="curve-preset-btn" data-preset="douce">Douce</button>
+                    <button class="curve-preset-btn" data-preset="pulse">Pulsé</button>
+                    <button class="curve-preset-btn" data-preset="vague">Vague</button>
+                    <button class="curve-preset-btn" data-preset="lineaire">Linéaire</button>
+                </div>
+                <canvas id="curveCanvas" class="curve-canvas"></canvas>
+                <div class="curve-hint">Glisser pour déplacer · Appui long pour supprimer · Toucher pour ajouter</div>
+                <label class="curve-enable-row">
+                    <input type="checkbox" class="toggle-ios" id="curveEnabled" aria-label="Activer la courbe personnalisée">
+                    <span>Activer la courbe personnalisée</span>
+                </label>
+            </div>
+        </section>
+
         <section class="card acc collapsed" data-acc="presets">
             <div class="section-title acc-toggle"><span class="acc-chevron">▸</span> 🎛 Préréglages</div>
             <div class="acc-body">
@@ -769,6 +813,8 @@ const defaultState = {
     waveform: 'sine',
     freq: 700, volume: 60, rythm: 0.5, depth: 0, emphasis: 0, ratio: 50,
     attack: 50, detente: 50, attackCurve: 0, detenteCurve: 0,
+    customCurve: [{x:0,y:0},{x:0.5,y:0.3},{x:0.72,y:1},{x:0.88,y:0.08},{x:1,y:0}],
+    curveEnabled: false,
     sweepActive: false, sweepLo: 500, sweepHi: 900, invertSweep: false, doubleSweep: false,
     balance: 0, phase: 0, detuneOffset: 0, detuneDepth: 0, subOctave: 0,
     panActive: false, panRate: 0.3, panDepth: 70, panRatio: 50,
@@ -794,6 +840,9 @@ function loadState() {
     state.detente      = Math.max(5,    Math.min(95,  state.detente      ?? 50));
     state.attackCurve  = Math.max(-100, Math.min(100, state.attackCurve  ?? 0));
     state.detenteCurve = Math.max(-100, Math.min(100, state.detenteCurve ?? 0));
+    if (!Array.isArray(state.customCurve) || state.customCurve.length < 2)
+        state.customCurve = [{x:0,y:0},{x:0.5,y:0.3},{x:0.72,y:1},{x:0.88,y:0.08},{x:1,y:0}];
+    state.curveEnabled = !!state.curveEnabled;
     Object.keys(defaultState).forEach(k => {
         if (state[k] === undefined) state[k] = defaultState[k];
     });
@@ -918,7 +967,11 @@ function updateModBuffer() {
     const size = ctx.sampleRate;
     const buf = ctx.createBuffer(1, size, ctx.sampleRate);
     const data = buf.getChannelData(0);
-    for (let i = 0; i < size; i++) data[i] = lfoShape(i/size, state.attack/100, state.detente/100, state.attackCurve/100, state.detenteCurve/100);
+    if (state.curveEnabled) {
+        for (let i = 0; i < size; i++) data[i] = sampleCustomCurve(i/size) * 2 - 1;
+    } else {
+        for (let i = 0; i < size; i++) data[i] = lfoShape(i/size, state.attack/100, state.detente/100, state.attackCurve/100, state.detenteCurve/100);
+    }
 
     const newOsc = ctx.createBufferSource();
     newOsc.buffer = buf; newOsc.loop = true;
@@ -1080,6 +1133,171 @@ function renderWaveSelect() {
 }
 
 // --- KNOBS (grid sliders) ---
+// ---- COURBE LFO PERSONNALISÉE ----
+const CURVE_PRESETS = {
+    douce:    [{x:0,y:0},{x:0.5,y:0.3},{x:0.72,y:1},{x:0.88,y:0.08},{x:1,y:0}],
+    pulse:    [{x:0,y:0},{x:0.08,y:1},{x:0.22,y:0},{x:1,y:0}],
+    vague:    [{x:0,y:0},{x:0.25,y:1},{x:0.5,y:0},{x:0.75,y:1},{x:1,y:0}],
+    lineaire: [{x:0,y:0},{x:0.5,y:1},{x:1,y:0}]
+};
+
+function catmullRomY(pts, x) {
+    if (pts.length < 2) return pts[0]?.y ?? 0;
+    if (x <= pts[0].x) return pts[0].y;
+    if (x >= pts[pts.length-1].x) return pts[pts.length-1].y;
+    let seg = 0;
+    for (let i = 0; i < pts.length - 1; i++) { if (x < pts[i+1].x) { seg = i; break; } }
+    const p0 = pts[Math.max(0, seg-1)], p1 = pts[seg];
+    const p2 = pts[seg+1], p3 = pts[Math.min(pts.length-1, seg+2)];
+    const dx = p2.x - p1.x; if (dx <= 0) return p1.y;
+    const t = (x - p1.x) / dx, t2 = t*t, t3 = t2*t;
+    const y = 0.5*(2*p1.y + (-p0.y+p2.y)*t + (2*p0.y-5*p1.y+4*p2.y-p3.y)*t2 + (-p0.y+3*p1.y-3*p2.y+p3.y)*t3);
+    return Math.max(0, Math.min(1, y));
+}
+
+function sampleCustomCurve(t) { return catmullRomY(state.customCurve, t); }
+
+let curveCanvas, curveCx, curveDragIdx = -1, curveLongPressTimer = null, curveDragMoved = false;
+
+function pt2cv(pt, w, h) { return { x: pt.x * w, y: (1 - pt.y) * h }; }
+function cv2pt(cx, cy, w, h) { return { x: Math.max(0,Math.min(1,cx/w)), y: Math.max(0,Math.min(1,1-cy/h)) }; }
+
+function resizeCurveCanvas() {
+    if (!curveCanvas) return;
+    const r = curveCanvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    curveCanvas.width = Math.round(r.width * dpr);
+    curveCanvas.height = Math.round(r.height * dpr);
+}
+
+function drawCurveEditor() {
+    if (!curveCx || !curveCanvas) return;
+    const r = curveCanvas.getBoundingClientRect();
+    if (r.width < 10) return;
+    const dpr = window.devicePixelRatio || 1, w = r.width, h = r.height;
+    const cx = curveCx;
+    cx.save(); cx.scale(dpr, dpr);
+    cx.clearRect(0, 0, w, h);
+
+    // grille
+    cx.strokeStyle = 'rgba(255,255,255,0.08)'; cx.lineWidth = 1;
+    for (let i = 1; i < 4; i++) {
+        cx.beginPath(); cx.moveTo(i/4*w, 0); cx.lineTo(i/4*w, h); cx.stroke();
+        cx.beginPath(); cx.moveTo(0, i/4*h); cx.lineTo(w, i/4*h); cx.stroke();
+    }
+
+    const pts = state.customCurve;
+    if (pts.length >= 2) {
+        // remplissage
+        cx.beginPath();
+        const p0c = pt2cv(pts[0],w,h);
+        cx.moveTo(p0c.x, h); cx.lineTo(p0c.x, p0c.y);
+        for (let i = 0; i < pts.length-1; i++) {
+            const a=pts[Math.max(0,i-1)], b=pts[i], c=pts[i+1], d=pts[Math.min(pts.length-1,i+2)];
+            const bc=pt2cv(b,w,h), cc=pt2cv(c,w,h);
+            const cp1x=bc.x+(pt2cv(c,w,h).x-pt2cv(a,w,h).x)/6, cp1y=bc.y+(pt2cv(c,w,h).y-pt2cv(a,w,h).y)/6;
+            const cp2x=cc.x-(pt2cv(d,w,h).x-pt2cv(b,w,h).x)/6, cp2y=cc.y-(pt2cv(d,w,h).y-pt2cv(b,w,h).y)/6;
+            cx.bezierCurveTo(cp1x,cp1y,cp2x,cp2y,cc.x,cc.y);
+        }
+        const lc=pt2cv(pts[pts.length-1],w,h); cx.lineTo(lc.x,h); cx.closePath();
+        const g=cx.createLinearGradient(0,0,0,h);
+        g.addColorStop(0, state.curveEnabled?'rgba(31,157,87,0.3)':'rgba(91,168,208,0.2)');
+        g.addColorStop(1,'rgba(0,0,0,0)'); cx.fillStyle=g; cx.fill();
+
+        // ligne
+        cx.beginPath(); cx.moveTo(pt2cv(pts[0],w,h).x, pt2cv(pts[0],w,h).y);
+        for (let i = 0; i < pts.length-1; i++) {
+            const a=pts[Math.max(0,i-1)], b=pts[i], c=pts[i+1], d=pts[Math.min(pts.length-1,i+2)];
+            const bc=pt2cv(b,w,h), cc=pt2cv(c,w,h);
+            const cp1x=bc.x+(pt2cv(c,w,h).x-pt2cv(a,w,h).x)/6, cp1y=bc.y+(pt2cv(c,w,h).y-pt2cv(a,w,h).y)/6;
+            const cp2x=cc.x-(pt2cv(d,w,h).x-pt2cv(b,w,h).x)/6, cp2y=cc.y-(pt2cv(d,w,h).y-pt2cv(b,w,h).y)/6;
+            cx.bezierCurveTo(cp1x,cp1y,cp2x,cp2y,cc.x,cc.y);
+        }
+        cx.strokeStyle = state.curveEnabled ? '#1f9d57' : '#5ba8d0';
+        cx.lineWidth = 2.5; cx.stroke();
+    }
+
+    // points de contrôle
+    pts.forEach((pt, idx) => {
+        const {x:px,y:py} = pt2cv(pt,w,h);
+        cx.beginPath(); cx.arc(px,py,9,0,2*Math.PI);
+        cx.fillStyle = idx===curveDragIdx ? '#fff' : (state.curveEnabled?'#1f9d57':'#5ba8d0');
+        cx.fill(); cx.strokeStyle='rgba(255,255,255,0.6)'; cx.lineWidth=1.5; cx.stroke();
+    });
+    cx.restore();
+}
+
+function bindCurveEditor() {
+    if (!curveCanvas) return;
+    const getP = e => { const r=curveCanvas.getBoundingClientRect(); return {x:e.clientX-r.left,y:e.clientY-r.top,w:r.width,h:r.height}; };
+    const nearPt = (px,py,w,h) => {
+        let best=-1, bd=28*28;
+        state.customCurve.forEach((pt,i)=>{ const c=pt2cv(pt,w,h); const d=(c.x-px)**2+(c.y-py)**2; if(d<bd){bd=d;best=i;} });
+        return best;
+    };
+    curveCanvas.addEventListener('pointerdown', e => {
+        e.preventDefault(); curveCanvas.setPointerCapture(e.pointerId);
+        const {x,y,w,h}=getP(e); curveDragMoved=false;
+        const idx=nearPt(x,y,w,h);
+        if (idx>=0) {
+            curveDragIdx=idx;
+            curveLongPressTimer=setTimeout(()=>{
+                if(!curveDragMoved && curveDragIdx>0 && curveDragIdx<state.customCurve.length-1){
+                    state.customCurve.splice(curveDragIdx,1); curveDragIdx=-1; onCurveChanged(); drawCurveEditor();
+                }
+            },500);
+        } else if (state.customCurve.length<8) {
+            const np=cv2pt(x,y,w,h);
+            if(np.x>0.03&&np.x<0.97){
+                let ins=state.customCurve.length;
+                for(let i=0;i<state.customCurve.length;i++){if(state.customCurve[i].x>np.x){ins=i;break;}}
+                state.customCurve.splice(ins,0,np); curveDragIdx=ins; onCurveChanged();
+            }
+        }
+        drawCurveEditor();
+    }, {passive:false});
+
+    curveCanvas.addEventListener('pointermove', e => {
+        if(curveDragIdx<0) return; e.preventDefault(); curveDragMoved=true; clearTimeout(curveLongPressTimer);
+        const {x,y,w,h}=getP(e); const pt=cv2pt(x,y,w,h);
+        const isEnd=curveDragIdx===0||curveDragIdx===state.customCurve.length-1;
+        if(isEnd){ state.customCurve[curveDragIdx].y=pt.y; }
+        else {
+            const px=state.customCurve[curveDragIdx-1].x+0.02;
+            const nx=state.customCurve[curveDragIdx+1].x-0.02;
+            state.customCurve[curveDragIdx].x=Math.max(px,Math.min(nx,pt.x));
+            state.customCurve[curveDragIdx].y=pt.y;
+        }
+        onCurveChanged(); drawCurveEditor();
+    }, {passive:false});
+
+    const end=()=>{ clearTimeout(curveLongPressTimer); curveDragIdx=-1; drawCurveEditor(); };
+    curveCanvas.addEventListener('pointerup',end); curveCanvas.addEventListener('pointercancel',end);
+}
+
+function onCurveChanged() { saveState(); if(state.curveEnabled) updateModBuffer(); }
+
+function initCurveEditor() {
+    curveCanvas=document.getElementById('curveCanvas');
+    if(!curveCanvas) return;
+    curveCx=curveCanvas.getContext('2d');
+    resizeCurveCanvas(); bindCurveEditor();
+    setTimeout(()=>{ resizeCurveCanvas(); drawCurveEditor(); }, 50);
+    window.addEventListener('resize',()=>{ resizeCurveCanvas(); drawCurveEditor(); });
+}
+
+function initCurvePresets() {
+    document.getElementById('curvePresets')?.querySelectorAll('.curve-preset-btn').forEach(btn=>{
+        btn.addEventListener('click',()=>{
+            const k=btn.dataset.preset;
+            if(CURVE_PRESETS[k]){ state.customCurve=JSON.parse(JSON.stringify(CURVE_PRESETS[k])); onCurveChanged(); drawCurveEditor(); }
+        });
+    });
+    document.getElementById('curveEnabled')?.addEventListener('change',e=>{
+        state.curveEnabled=e.target.checked; updateModBuffer(); saveState(); drawCurveEditor();
+    });
+}
+
 const knobsDef = [
     { id:'freq',     label:'Fréquence', min:50,  max:1200, step:10,   color:'#0f6b7a', fmt: v => v+' Hz' },
     { id:'volume',   label:'Volume',    min:0,   max:100,  step:1,    color:'#9c5e16', fmt: v => v+' %' },
@@ -1295,6 +1513,9 @@ function syncAllUI() {
     updatePanUI();
     document.getElementById('invertToggle').checked = !!state.invertSweep;
     document.getElementById('doubleToggle').checked = !!state.doubleSweep;
+    const ce = document.getElementById('curveEnabled');
+    if (ce) ce.checked = !!state.curveEnabled;
+    drawCurveEditor();
 }
 
 // --- SWEEP ---
@@ -1604,7 +1825,9 @@ function animate() {
     }
 
     if (state.sweepActive && state.playing && !state.hold) {
-        let lfo = lfoShape(currentPhaseIntegrator, state.attack/100, state.detente/100, state.attackCurve/100, state.detenteCurve/100);
+        let lfo = state.curveEnabled
+            ? sampleCustomCurve(currentPhaseIntegrator) * 2 - 1
+            : lfoShape(currentPhaseIntegrator, state.attack/100, state.detente/100, state.attackCurve/100, state.detenteCurve/100);
         if (state.doubleSweep) lfo = 2*Math.abs(lfo)-1;
         if (state.invertSweep) lfo = -lfo;
         const instFreq = (state.sweepLo+state.sweepHi)/2 + (state.sweepHi-state.sweepLo)/2*lfo;
@@ -1681,6 +1904,7 @@ function initAccordion() {
             // Le balayage positionne ses poignées d'après la largeur du conteneur,
             // nulle tant que la section est repliée : on recalcule à l'ouverture.
             if (!collapsed && id === 'sweep' && typeof updateSweepUI === 'function') updateSweepUI();
+            if (!collapsed && id === 'curve') setTimeout(()=>{ resizeCurveCanvas(); drawCurveEditor(); }, 50);
         };
         head.addEventListener('click', e => { if (!fromControl(e.target)) toggle(); });
         head.addEventListener('keydown', e => {
@@ -1742,6 +1966,8 @@ window.addEventListener('load', () => {
     document.getElementById('doubleToggle').checked = !!state.doubleSweep;
     setupDevices();
     initAccordion();
+    initCurveEditor();
+    initCurvePresets();
 
     function waitForLayout(attempts) {
         initCanvas();
