@@ -724,19 +724,33 @@ function warpPhase(t, r) {
     }
 }
 
+// Courbe convexe/concave sur l'intervalle [0,1].
+// curve : −1 (très concave) → 0 (linéaire) → +1 (très convexe)
+function shapedHalf(u, curve) {
+    if (Math.abs(curve) < 0.01) return u;
+    const exp = curve >= 0 ? 1 / (1 + curve * 2) : 1 + (-curve) * 2;
+    return Math.pow(Math.max(0, Math.min(1, u)), exp);
+}
+
 // Enveloppe LFO asymétrique à attack et détente indépendants.
 // attack, detente : fractions 0..1 du cycle. Si leur somme > 1, ils sont
 // normalisés. Le reste du cycle est une phase de repos au minimum (-1).
-// Transitions en cosinus pour éviter les discontinuités de dérivée.
-function lfoShape(t, attack, detente) {
+// cA/cD : courbe de chaque demi-cycle (−1 concave … 0 cosinus … +1 convexe).
+function lfoShape(t, attack, detente, cA, cD) {
     const a = Math.max(0.02, attack);
     const d = Math.max(0.02, detente);
     const sum = a + d;
     const na = sum > 1 ? a / sum : a;
     const nd = sum > 1 ? d / sum : d;
-    if (t < na)       return -Math.cos(Math.PI * t / na);           // −1 → +1
-    if (t < na + nd)  return  Math.cos(Math.PI * (t - na) / nd);    // +1 → −1
-    return -1;                                                        // repos
+    if (t < na) {
+        const u = shapedHalf(t / na, cA ?? 0);
+        return -Math.cos(Math.PI * u);           // −1 → +1
+    }
+    if (t < na + nd) {
+        const u = shapedHalf((t - na) / nd, cD ?? 0);
+        return  Math.cos(Math.PI * u);            // +1 → −1
+    }
+    return -1;                                    // repos
 }
 
 function subOctaveHMax(fMain) {
@@ -754,7 +768,7 @@ const USER_PRESETS_KEY = 'stimgen_v10_user_presets';
 const defaultState = {
     waveform: 'sine',
     freq: 700, volume: 60, rythm: 0.5, depth: 0, emphasis: 0, ratio: 50,
-    attack: 50, detente: 50,
+    attack: 50, detente: 50, attackCurve: 0, detenteCurve: 0,
     sweepActive: false, sweepLo: 500, sweepHi: 900, invertSweep: false, doubleSweep: false,
     balance: 0, phase: 0, detuneOffset: 0, detuneDepth: 0, subOctave: 0,
     panActive: false, panRate: 0.3, panDepth: 70, panRatio: 50,
@@ -776,8 +790,10 @@ function loadState() {
     if (!['free','half','x1','x2'].includes(state.panSync)) state.panSync = 'free';
     state.panPhase = Math.max(0, Math.min(360, state.panPhase || 0));
     state.panLinkRatio = !!state.panLinkRatio;
-    state.attack  = Math.max(5, Math.min(95, state.attack  ?? 50));
-    state.detente = Math.max(5, Math.min(95, state.detente ?? 50));
+    state.attack       = Math.max(5,    Math.min(95,  state.attack       ?? 50));
+    state.detente      = Math.max(5,    Math.min(95,  state.detente      ?? 50));
+    state.attackCurve  = Math.max(-100, Math.min(100, state.attackCurve  ?? 0));
+    state.detenteCurve = Math.max(-100, Math.min(100, state.detenteCurve ?? 0));
     Object.keys(defaultState).forEach(k => {
         if (state[k] === undefined) state[k] = defaultState[k];
     });
@@ -902,7 +918,7 @@ function updateModBuffer() {
     const size = ctx.sampleRate;
     const buf = ctx.createBuffer(1, size, ctx.sampleRate);
     const data = buf.getChannelData(0);
-    for (let i = 0; i < size; i++) data[i] = lfoShape(i/size, state.attack/100, state.detente/100);
+    for (let i = 0; i < size; i++) data[i] = lfoShape(i/size, state.attack/100, state.detente/100, state.attackCurve/100, state.detenteCurve/100);
 
     const newOsc = ctx.createBufferSource();
     newOsc.buffer = buf; newOsc.loop = true;
@@ -1185,7 +1201,9 @@ const hsDef = [
     { id:'phase',        label:'Déphasage L/R',      min:-45,  max:45,   step:1   },
     { id:'detuneOffset', label:'Détune Offset',      min:-2.5, max:2.5,  step:0.1 },
     { id:'detuneDepth',  label:'Profondeur Détune',  min:0,    max:100,  step:1   },
-    { id:'subOctave',    label:'Sous-octave (Bass)', min:0,    max:100,  step:1   }
+    { id:'subOctave',    label:'Sous-octave (Bass)', min:0,    max:100,  step:1   },
+    { id:'attackCurve',  label:'Courbe Attack',      min:-100, max:100,  step:5   },
+    { id:'detenteCurve', label:'Courbe Détente',     min:-100, max:100,  step:5   }
 ];
 const hsRefs = {};
 
@@ -1198,6 +1216,11 @@ function fmtHS(id, v) {
     if (id === 'subOctave') {
         const cf = state.sweepActive ? (state.sweepLo+state.sweepHi)/2 : state.freq;
         return cf < 100 ? '(muet)' : `${v} % (${(cf/2).toFixed(0)} Hz)`;
+    }
+    if (id === 'attackCurve' || id === 'detenteCurve') {
+        if (v > 0) return `convexe +${v}`;
+        if (v < 0) return `concave ${v}`;
+        return 'cosinus';
     }
     return v;
 }
@@ -1245,6 +1268,7 @@ function renderSliders() {
             range.value = nv;
             valEl.textContent = fmtHS(s.id, nv);
             setHSTrack(nv);
+            if (s.id === 'attackCurve' || s.id === 'detenteCurve') updateModBuffer();
             if (audioInit) updateAudioParams();
             saveState();
         };
@@ -1580,7 +1604,7 @@ function animate() {
     }
 
     if (state.sweepActive && state.playing && !state.hold) {
-        let lfo = lfoShape(currentPhaseIntegrator, state.attack/100, state.detente/100);
+        let lfo = lfoShape(currentPhaseIntegrator, state.attack/100, state.detente/100, state.attackCurve/100, state.detenteCurve/100);
         if (state.doubleSweep) lfo = 2*Math.abs(lfo)-1;
         if (state.invertSweep) lfo = -lfo;
         const instFreq = (state.sweepLo+state.sweepHi)/2 + (state.sweepHi-state.sweepLo)/2*lfo;
