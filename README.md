@@ -1,154 +1,92 @@
-# FFB Analyzer – Wheel Comparison Tool
+# Wave Generator — Mobile
 
-A Windows desktop application for **measuring, comparing, and sharing Force Feedback (FFB) responses** from sim racing steering wheels.
+Générateur d'ondes audio (application web autonome). Toute l'application tient
+dans un seul fichier : **`index.html`**. Elle utilise l'API Web Audio, qui exige
+d'être servie par un serveur web (elle ne fonctionne pas de façon fiable en
+ouvrant simplement le fichier `index.html` directement dans le navigateur).
 
-## Purpose
+Ce dépôt fournit un petit serveur web sans aucune dépendance à installer.
 
-Different sim racing wheels produce different FFB sensations for the same settings. FFB Analyzer lets you:
+## Démarrage rapide sur un nouvel ordinateur
 
-1. Run **standardised signal tests** (step response, sine sweep, square wave, etc.) outside the game
-2. **Compare before/after** driver setting changes with objective graphs and metrics
-3. **Share results** with friends to compare wheels across brands (Fanatec, Simagic, Moza, Simucube, etc.)
+1. Récupérez le dépôt :
 
----
+   ```bash
+   git clone https://github.com/tibalotte/wave-generator-mobile.git
+   cd wave-generator-mobile
+   ```
 
-## Features
+2. Lancez le serveur avec **l'une** des méthodes ci-dessous (selon ce qui est
+   déjà installé sur la machine — aucune installation supplémentaire n'est
+   nécessaire).
 
-### Tests
-| Test | Description |
-|------|-------------|
-| **Step Response** | 0 → target intensity, hold, return. Measures rise time, overshoot, settling |
-| **Sine Sweep** | 1–60 Hz frequency sweep. Reveals filters and resonance |
-| **Chirp** | Exponential frequency sweep (5–80 Hz). Better high-frequency coverage |
-| **Square Wave** | Fixed-frequency square signal. Shows smoothing and latency |
-| **Impulse** | Brief pulse. Measures transient response and residual oscillation |
-| **Constant Torque** | Hold a constant force. Measures steady-state error and stability |
-| **Friction Emulation** | Micro-oscillations near zero. Reveals deadband and friction zone |
+### Option A — Python (le plus courant)
 
-### Metrics (automatic)
-- Rise time (10→90%), overshoot %, settling time (±2%), steady-state error
-- Cutoff frequency (−3 dB), resonance peaks and frequency
-- Estimated latency (cross-correlation), smoothing index
-- Clipping detection
-
-### Semantic Interpretations
-- "High damping / inertia detected"
-- "Strong filter / smoothing (cutoff ≈ X Hz)"
-- "Resonance peak at X Hz"
-- "Increased latency detected"
-
-### Comparison
-- Overlay multiple runs on the same chart
-- Difference curve (B − A)
-- Side-by-side metric table
-
-### Export / Import
-- **JSON** – full session with all data and metrics
-- **CSV** – time-series data for a single run
-- **ZIP** – JSON + individual CSVs bundled
-
----
-
-## Requirements
-
-- **Windows 10 / 11** (64-bit)
-- **.NET 8 Runtime** (included in self-contained builds)
-- A **DirectInput-compatible FFB wheel**
-
----
-
-## Architecture
-
-```
-src/
-├── FFBAnalyzer/                    # WPF application
-│   ├── Models/                     # Data models (Device, Run, Session, …)
-│   ├── Services/
-│   │   ├── FFBSignalGenerator.cs   # Pure signal math (testable)
-│   │   ├── MetricsService.cs       # Pure metrics computation (testable)
-│   │   ├── TestRunnerService.cs    # Orchestrates test execution
-│   │   ├── SessionStorageService.cs# SQLite persistence
-│   │   └── ExportService.cs        # JSON / CSV / ZIP export-import
-│   ├── Adapters/
-│   │   ├── IDeviceAdapter.cs       # Contract for all device backends
-│   │   └── DirectInputAdapter.cs   # Generic Windows DirectInput adapter
-│   ├── ViewModels/                 # MVVM ViewModels (CommunityToolkit.Mvvm)
-│   ├── Views/                      # WPF UserControls
-│   └── Converters/                 # WPF value converters
-└── FFBAnalyzer.Tests/              # xUnit unit tests
-    ├── MetricsServiceTests.cs
-    └── ExportServiceTests.cs
-```
-
-### Telemetry Modes
-
-| Mode | Available data | Typical wheels |
-|------|---------------|----------------|
-| **A – Full** | Position + velocity + torque | SDK-equipped (SimuCube, VRS) |
-| **B – Partial** | Position only (HID) | Most DirectInput wheels |
-| **C – Software only** | None | Very basic HID devices |
-
----
-
-## Test Batteries
-
-| Battery | Duration | Tests |
-|---------|----------|-------|
-| Quick | ~2 min | Step, Sweep, Square |
-| Standard | ~5 min | Step ×2, Sweep, Chirp, Constant |
-| Deep | ~12 min | All 7 test types |
-
----
-
-## Safety
-
-- Emergency **STOP** button always visible during a test
-- Configurable **maximum intensity limit** (default 80%)
-- **Countdown** (3…2…1) before each test
-- **Watchdog**: FFB is forced off if the UI freezes
-- Test ramp option to avoid sudden jolts
-
----
-
-## Development
+Python 3 est préinstallé sur macOS et la plupart des Linux, et disponible sur
+Windows.
 
 ```bash
-# Build
-dotnet build FFBAnalyzer.sln
-
-# Run tests
-dotnet test src/FFBAnalyzer.Tests/FFBAnalyzer.Tests.csproj
-
-# Run application (Windows required)
-dotnet run --project src/FFBAnalyzer/FFBAnalyzer.csproj
+python3 server.py
 ```
 
-### Technology Stack
-- **C# 12 / .NET 8** – WPF desktop application
-- **CommunityToolkit.Mvvm** – MVVM pattern
-- **SharpDX.DirectInput** – FFB device communication
-- **LiveChartsCore** – real-time charts
-- **Microsoft.Data.Sqlite + Dapper** – local storage
-- **Newtonsoft.Json** – serialization
-- **SharpZipLib** – ZIP packaging
-- **xUnit + FluentAssertions** – unit tests
+Sur Windows, la commande est souvent `python` :
 
----
+```bash
+python server.py
+```
 
-## Protocol Recommendation
+### Option B — Node.js
 
-For reliable comparisons between users:
+Si Node.js est installé :
 
-1. **Calibrate** the wheel before each session
-2. Use the **Standard battery** as the baseline
-3. Change **one setting at a time** and run a new batch
-4. Export the ZIP and share – the recipient imports and can overlay your curves with theirs
+```bash
+node server.js
+```
 
----
+### Option C — sans script (une seule ligne)
 
-## Roadmap (v2)
+Si vous ne voulez pas utiliser les scripts fournis :
 
-- **Settings assistant** – automatic suggestions ("reduce damping", "lower filter")
-- **Community mode** – aggregate data per wheel model
-- **In-game telemetry** – capture live FFB during a race lap
-- **Simucube / VRS SDK adapters** – full torque telemetry
+```bash
+python3 -m http.server 8000
+```
+
+## Utilisation
+
+Une fois le serveur démarré, ouvrez :
+
+```
+http://localhost:8000
+```
+
+(Les scripts `server.py` et `server.js` ouvrent le navigateur automatiquement.)
+
+Pour changer de port, passez-le en argument :
+
+```bash
+python3 server.py 8080
+# ou
+node server.js 8080
+```
+
+Pour arrêter le serveur : `Ctrl+C`.
+
+## Accès depuis un téléphone sur le même réseau Wi-Fi
+
+L'application est pensée pour le mobile. Pour l'ouvrir sur votre téléphone :
+
+1. Trouvez l'adresse IP locale de l'ordinateur (par ex. `192.168.1.42`) :
+   - macOS / Linux : `ipconfig getifaddr en0` ou `hostname -I`
+   - Windows : `ipconfig`
+2. Sur le téléphone (connecté au même Wi-Fi), ouvrez `http://192.168.1.42:8000`.
+
+Note : certaines fonctions audio (comme le micro) peuvent exiger un contexte
+sécurisé (HTTPS) selon le navigateur. Sur `localhost`, tout fonctionne ; en accès
+réseau par IP, la lecture de sons fonctionne, mais l'entrée micro peut être
+bloquée par le navigateur tant qu'on n'est pas en HTTPS.
+
+## Contenu du dépôt
+
+- `index.html` — l'application complète (Wave Generator).
+- `server.py` — serveur web statique en Python 3, sans dépendance.
+- `server.js` — serveur web statique en Node.js, sans dépendance.
